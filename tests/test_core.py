@@ -83,6 +83,34 @@ def test_export_skips_exact_duplicates(tmp_path):
     assert len(rows) == 2
 
 
+ARABIC_FONTS = ["C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/tahoma.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
+
+
+def test_arabic_slide_matches(tmp_path):
+    """PDF writers store Arabic as shaped letters in visual order; mimic that."""
+    import os
+    import pytest
+    arabic_reshaper = pytest.importorskip("arabic_reshaper")
+    bidi = pytest.importorskip("bidi.algorithm")
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    font = next((f for f in ARABIC_FONTS if os.path.exists(f)), None)
+    if font is None:
+        pytest.skip("no Arabic-capable font found")
+    pdfmetrics.registerFont(TTFont("ArabicTest", font))
+    pdf = tmp_path / "ar.pdf"
+    c = canvas.Canvas(str(pdf))
+    c.setFont("ArabicTest", 16)
+    c.drawString(72, 800, bidi.get_display(arabic_reshaper.reshape("الكلية تنظم توازن الماء")))
+    c.showPage()
+    c.save()
+    slides = core.read_slides(str(pdf))
+    card = lambda back: core.check_card({"front": "q", "back": back, "slide": 1}, slides)
+    assert card("الكلية تنظم توازن الماء")["ok"] and card("تُنظّم توازن")["ok"]
+    assert not card("القلب ينظم توازن الماء")["ok"]
+
+
 def test_pdf_with_no_pages_raises(tmp_path):
     from pypdf import PdfWriter
     import pytest

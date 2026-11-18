@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = ["mcp>=1.2,<2", "pypdf>=4"]
 
 [project.optional-dependencies]
-test = ["pytest", "reportlab"]
+test = ["pytest", "reportlab", "arabic-reshaper", "python-bidi"]
 
 [project.scripts]
 slide-anki-mcp = "slide_anki_mcp.server:main"

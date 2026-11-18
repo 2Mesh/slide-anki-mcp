@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import csv
 import re
+import unicodedata
 from pathlib import Path
 
 from pypdf import PdfReader
 
 
 def _norm(text: str) -> str:
-    """Lowercase and collapse whitespace/punctuation so matching ignores layout."""
+    """Lowercase and collapse whitespace/punctuation so matching ignores layout.
+
+    NFKC turns Arabic presentation forms (what PDFs often store) back into
+    normal letters; combining marks such as Arabic short vowels are dropped.
+    """
+    text = unicodedata.normalize("NFKC", text)
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
     return re.sub(r"[\W_]+", " ", text.lower()).strip()
 
 
