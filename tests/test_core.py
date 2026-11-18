@@ -70,6 +70,17 @@ def test_bad_card_fields_are_rejected_not_crashing():
         assert not core.check_card(bad, slides)["ok"]
 
 
+def test_export_skips_exact_duplicates(tmp_path):
+    from slide_anki_mcp import server
+    pdf = tmp_path / "lec.pdf"
+    make_pdf(pdf, [["Mitral valve has two cusps"]])
+    card = {"front": "Cusps?", "back": "two cusps", "slide": 1}
+    other = {**card, "front": "Mitral cusps?"}
+    res = server.export_anki(str(pdf), [card, other, dict(card)], str(tmp_path / "o.tsv"))
+    assert res["count"] == 2 and res["duplicates_skipped"] == [2]
+    assert len(open(res["written"], encoding="utf-8").read().splitlines()) == 2
+
+
 def test_pdf_with_no_pages_raises(tmp_path):
     from pypdf import PdfWriter
     import pytest

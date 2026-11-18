@@ -35,13 +35,26 @@ def check_cards(pdf_path: str, cards: list[dict]) -> list[dict]:
 
 @mcp.tool()
 def export_anki(pdf_path: str, cards: list[dict], out_path: str) -> dict:
-    """Write cards to an Anki-importable .tsv, refusing cards not supported by their slide."""
+    """Write cards to an Anki-importable .tsv, refusing cards not supported by their slide.
+
+    Exact duplicates (same front and same back) are written once; the indexes
+    of the skipped copies are listed in 'duplicates_skipped'.
+    """
     slides = core.read_slides(pdf_path)
     checks = [core.check_card(c, slides) for c in cards]
     bad = [i for i, c in enumerate(checks) if not c["ok"]]
     if bad:
         return {"written": None, "rejected_card_indexes": bad, "details": [checks[i] for i in bad]}
-    return {"written": core.write_anki_tsv(cards, out_path), "count": len(cards)}
+    seen, unique, dupes = set(), [], []
+    for i, c in enumerate(cards):
+        key = (c["front"], c["back"])
+        if key in seen:
+            dupes.append(i)
+        else:
+            seen.add(key)
+            unique.append(c)
+    return {"written": core.write_anki_tsv(unique, out_path), "count": len(unique),
+            "duplicates_skipped": dupes}
 
 
 def main() -> None:
