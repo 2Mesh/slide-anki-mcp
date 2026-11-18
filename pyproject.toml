@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "slide-anki-mcp"
+version = "0.1.0"
+description = "MCP server that turns lecture PDFs into Anki cards, rejecting any answer the cited slide does not support."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = ["mcp>=1.2,<2", "pypdf>=4"]
+
+[project.optional-dependencies]
+test = ["pytest", "reportlab"]
+
+[project.scripts]
+slide-anki-mcp = "slide_anki_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/slide_anki_mcp"]
