@@ -13,7 +13,7 @@ from pypdf import PdfReader
 def _norm(text: str) -> str:
     """Lowercase and collapse whitespace/punctuation so matching ignores layout.
 
-    NFKC turns Arabic presentation forms (what PDFs often store) back into
+    NFKC turns Arabic presentation forms (which PDFs may store) back into
     normal letters; combining marks such as Arabic short vowels are dropped.
     """
     text = unicodedata.normalize("NFKC", text)

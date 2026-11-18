@@ -88,7 +88,7 @@ ARABIC_FONTS = ["C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/tahoma.ttf",
 
 
 def test_arabic_slide_matches(tmp_path):
-    """PDF writers store Arabic as shaped letters in visual order; mimic that."""
+    """Store Arabic as shaped letters in display (right-to-left) order, as a PDF may."""
     import os
     import pytest
     arabic_reshaper = pytest.importorskip("arabic_reshaper")
