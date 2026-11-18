@@ -41,7 +41,8 @@ def test_check_card_supported_and_unsupported(tmp_path):
 
 def test_write_tsv_tags_slide(tmp_path):
     out = core.write_anki_tsv([{"front": "Q", "back": "A", "slide": 4}], str(tmp_path / "o.tsv"))
-    assert open(out, encoding="utf-8").read() == "Q\tA\tslides Slide_4\n"
+    assert open(out, encoding="utf-8").read() == (
+        "#separator:tab\n#html:false\n#tags column:3\nQ\tA\tslides Slide_4\n")
 
 
 def test_short_wrong_answer_is_rejected(tmp_path):
@@ -78,7 +79,8 @@ def test_export_skips_exact_duplicates(tmp_path):
     other = {**card, "front": "Mitral cusps?"}
     res = server.export_anki(str(pdf), [card, other, dict(card)], str(tmp_path / "o.tsv"))
     assert res["count"] == 2 and res["duplicates_skipped"] == [2]
-    assert len(open(res["written"], encoding="utf-8").read().splitlines()) == 2
+    rows = [ln for ln in open(res["written"], encoding="utf-8") if not ln.startswith("#")]
+    assert len(rows) == 2
 
 
 def test_pdf_with_no_pages_raises(tmp_path):

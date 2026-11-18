@@ -69,10 +69,13 @@ def write_anki_tsv(cards: list[dict], out_path: str, deck_tag: str = "slides") -
     """Write an Anki-importable tab-separated file: Front, Back, Tags.
 
     Each card gets a tag like ``Slide_12`` so the source stays visible in Anki.
+    The header lines tell Anki 2.1.54+ the separator, plain text and tags
+    column, so no import settings need changing.
     """
     path = Path(out_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as fh:
+        fh.write("#separator:tab\n#html:false\n#tags column:3\n")
         writer = csv.writer(fh, delimiter="\t", lineterminator="\n")
         for card in cards:
             tag = f"{deck_tag} Slide_{card['slide']}"
