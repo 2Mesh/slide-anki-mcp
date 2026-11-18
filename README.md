@@ -34,7 +34,9 @@ Ask Claude: "Read lecture.pdf with slide-anki and make cards from slides 3 to 10
 ## Limits
 
 - Works on PDFs with real text. Image-only slides have no text, so `list_slides` warns and no cards can be checked against them. Scanned decks need OCR first. (Tried on a real 40-slide lecture: 4 slides had no text at all and 7 more had under 40 characters, mostly section titles.)
-- The check is a text match after removing case and punctuation. It catches invented wording, not wrong reasoning, and short fragments (3 words or fewer) are ignored.
+- The check is a whole-word text match after removing case and punctuation. Every part of the answer is checked, short ones too, so a one-word answer must also be on the slide. It catches invented wording, not wrong reasoning, and it rejects correct paraphrases: copy the slide's wording.
+- A card with an empty front or back, or a slide number that is not a whole number in range, is rejected.
+- Arabic text is not tested on a real lecture yet. On a test PDF made with reportlab the extracted Arabic came out in reversed letter order, so Arabic cards did not match.
 - Text extraction quality depends on the PDF.
 
 ## Develop

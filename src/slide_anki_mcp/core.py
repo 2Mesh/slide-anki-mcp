@@ -17,6 +17,8 @@ def _norm(text: str) -> str:
 def read_slides(pdf_path: str) -> list[str]:
     """Return the text of each page (slide), index 0 = slide 1."""
     reader = PdfReader(pdf_path)
+    if not reader.pages:
+        raise ValueError("PDF has no pages")
     return [(page.extract_text() or "").replace("�", "-").strip() for page in reader.pages]
 
 
@@ -40,19 +42,24 @@ def slide_overview(slides: list[str]) -> list[dict]:
 def check_card(card: dict, slides: list[str]) -> dict:
     """Flag a card whose answer is not supported by the slide it cites.
 
-    The answer is split into fragments (by newline or ';' or '.'); every
-    fragment longer than 3 words must appear in the slide text after
-    normalisation. Short fragments are ignored to avoid false alarms.
+    The answer is split into fragments (by newline, ';' or a sentence-ending
+    '.'); every fragment must appear as whole words in the slide text after
+    normalisation. Short answers are checked too, so "Anterior pituitary"
+    fails on a slide that says "Hypothalamus".
     """
     page = card.get("slide")
     result = {"slide": page, "ok": True, "unsupported": []}
-    if not isinstance(page, int) or not 1 <= page <= len(slides):
+    if isinstance(page, bool) or not isinstance(page, int) or not 1 <= page <= len(slides):
         result.update(ok=False, unsupported=["slide number missing or out of range"])
         return result
-    slide_norm = _norm(slides[page - 1])
-    for frag in re.split(r"[\n;.]+", card.get("back", "")):
+    front, back = card.get("front"), card.get("back")
+    if not isinstance(front, str) or not front.strip() or not isinstance(back, str) or not _norm(back):
+        result.update(ok=False, unsupported=["front and back must be non-empty text"])
+        return result
+    slide_norm = f" {_norm(slides[page - 1])} "
+    for frag in re.split(r"[\n;]+|\.(?=\s|$)", back):
         words = _norm(frag)
-        if len(words.split()) > 3 and words not in slide_norm:
+        if words and f" {words} " not in slide_norm:
             result["unsupported"].append(frag.strip())
     result["ok"] = not result["unsupported"]
     return result

@@ -42,3 +42,38 @@ def test_check_card_supported_and_unsupported(tmp_path):
 def test_write_tsv_tags_slide(tmp_path):
     out = core.write_anki_tsv([{"front": "Q", "back": "A", "slide": 4}], str(tmp_path / "o.tsv"))
     assert open(out, encoding="utf-8").read() == "Q\tA\tslides Slide_4\n"
+
+
+def test_short_wrong_answer_is_rejected(tmp_path):
+    pdf = tmp_path / "lec.pdf"
+    make_pdf(pdf, [["ADH is produced in Hypothalamus", "Daily intake is 100 meq"]])
+    slides = core.read_slides(str(pdf))
+    card = lambda back: core.check_card({"front": "q", "back": back, "slide": 1}, slides)
+    assert card("Hypothalamus")["ok"] and card("100 meq")["ok"]
+    assert not card("Anterior pituitary")["ok"] and not card("200 meq")["ok"]
+
+
+def test_match_needs_whole_words(tmp_path):
+    pdf = tmp_path / "lec.pdf"
+    make_pdf(pdf, [["Mitral valve has two cusps", "Give 0.9% saline e.g. in shock"]])
+    slides = core.read_slides(str(pdf))
+    card = lambda back: core.check_card({"front": "q", "back": back, "slide": 1}, slides)
+    assert not card("Mitral valve has tw")["ok"] and not card("itral valve")["ok"]
+    assert card("Give 0.9% saline e.g. in shock")["ok"]
+
+
+def test_bad_card_fields_are_rejected_not_crashing():
+    slides = ["Mitral valve has two cusps"]
+    good = {"front": "q", "back": "two cusps", "slide": 1}
+    for bad in ({"front": "q", "slide": 1}, {**good, "back": ""}, {**good, "back": None},
+                {**good, "back": 5}, {"back": "two cusps", "slide": 1}, {**good, "slide": True}):
+        assert not core.check_card(bad, slides)["ok"]
+
+
+def test_pdf_with_no_pages_raises(tmp_path):
+    from pypdf import PdfWriter
+    import pytest
+    pdf = tmp_path / "zero.pdf"
+    PdfWriter().write(str(pdf))
+    with pytest.raises(ValueError):
+        core.read_slides(str(pdf))
