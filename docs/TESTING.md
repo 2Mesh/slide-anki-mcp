@@ -138,7 +138,7 @@ I ran the cloze rule over 41 real Arabic PDFs: 65,130 random cloze cards, 62,535
 
 | | |
 |---|---|
-| **Guaranteed** | A card marked `verified` is a cloze card: filling its blank with the back gives back the slide's own line, letter for letter (checked on 335,175 random cloze cards over 271 PDFs: 271,389 verified, 0 violations of that rule). Cards with OCR text are never `verified`. |
+| **Guaranteed** | A card marked `verified` is a cloze card: filling its blank with the back gives back the slide's own line, letter for letter (checked on 335,175 random cloze cards over 271 PDFs: 269,623 verified, 0 violations (re-run after the slide-title change) of that rule). Cards with OCR text are never `verified`. |
 | **Not guaranteed** | That a blank makes a good question (some blanks have little context). That a free-form question matches its quote: those need your review and are tagged `reviewed`. That the PDF text was extracted correctly (damaged Arabic PDFs give a warning). |
 | **Measured, not promised** | 56 of 60 correct cloze cards accepted on the four tuning lectures; 29 of 30 on three lectures not used for tuning. The rest are refused with a `suggested_quote` taken from the slide. |
 | **Not tested** | Google Docs, LibreOffice and macOS exports; the Anki desktop app (the official `anki` library was used). |

@@ -22,8 +22,9 @@ for pdf in sorted(Path(sys.argv[1]).glob("*.pdf")):
                 r = core.check_card({"cloze": True, "back": back, "slide": n, "evidence": line}, slides)
                 if r.get("status") == "verified":
                     verified += 1
-                    filled = r["front"].replace("___", back)
-                    if re.sub("[-]", "•", line) not in filled or r["front"].count("___") < 1:  # private-use bullets are shown as dots
+                    pua = lambda t: re.sub("[-]", "•", t)  # private-use bullets are shown as dots
+                    filled = pua(r["front"].replace("___", back))
+                    if pua(line) not in filled or r["front"].count("___") < 1:
                         bad.append((pdf.name[:3], n, back))
 print(f"tried {tried}, verified {verified}, violations {len(bad)}")
 sys.exit(1 if bad else 0)
