@@ -17,6 +17,8 @@ Issues = "https://github.com/2Mesh/slide-anki-mcp/issues"
 
 [project.optional-dependencies]
 test = ["pytest", "reportlab", "arabic-reshaper", "python-bidi"]
+# OCR for image-only pages, Windows only (uses the OCR built into Windows 10/11)
+ocr = ["winocr>=0.0.15; sys_platform == 'win32'", "pillow"]
 
 [project.scripts]
 slide-anki-mcp = "slide_anki_mcp.server:main"

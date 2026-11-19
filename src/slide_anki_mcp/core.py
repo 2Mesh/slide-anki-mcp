@@ -12,6 +12,7 @@ from __future__ import annotations
 import csv
 import re
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from pypdf import PdfReader
@@ -149,8 +150,89 @@ def _arabic_loose_match(slide_t: str, ev_t: str) -> bool:
     return False
 
 
+_OCR_CACHE: dict = {}
+
+
+class OcrText(str):
+    """Slide text read by OCR from a picture, not from the PDF's text layer."""
+    ocr = True
+
+
+def _ocr_rtl(line: str) -> str:
+    """Windows OCR gives an Arabic line's words in visual (left-to-right) order and
+    numbers such as 145-135 or 80/120 the same way. Put them in reading order."""
+    if not re.search(f"[{_AR}]", line):
+        return line
+    groups: list = []
+    for word in line.split():
+        m = re.fullmatch(r"(\d+(?:\.\d+)?)([-/])(\d+(?:\.\d+)?)", word)
+        word = f"{m[3]}{m[2]}{m[1]}" if m else word
+        if groups and re.match("[A-Za-z]", word) and re.match("[A-Za-z]", groups[-1][-1]):
+            groups[-1].append(word)  # an English phrase keeps its own order
+        else:
+            groups.append([word])
+    return " ".join(" ".join(g) for g in reversed(groups))
+
+
+def _ocr_rtl_rows(lines: list) -> list:
+    """Windows OCR can cut one Arabic line in two and list the parts out of order.
+    Join parts that share a baseline and sit close together, right part first."""
+    segs = []
+    for ln in lines:
+        boxes = [w["bounding_rect"] for w in ln["words"]]
+        if not boxes:
+            continue
+        x0, x1 = min(b["x"] for b in boxes), max(b["x"] + b["width"] for b in boxes)
+        y0, y1 = min(b["y"] for b in boxes), max(b["y"] + b["height"] for b in boxes)
+        segs.append((x0, x1, (y0 + y1) / 2, y1 - y0, ln["text"]))
+    rows: list = []
+    for seg in sorted(segs, key=lambda g: g[2]):
+        for row in rows:
+            if any(abs(seg[2] - o[2]) < 0.5 * max(seg[3], o[3])
+                   and max(seg[0] - o[1], o[0] - seg[1]) < 3 * max(seg[3], o[3]) for o in row):
+                row.append(seg)
+                break
+        else:
+            rows.append([seg])
+    return [" ".join(_ocr_rtl(g[4]) for g in sorted(row, key=lambda g: -g[1])) for row in rows]
+
+
+def _ocr_page(page) -> str:
+    """Text of the pictures on a page, by Windows OCR. Empty when the optional
+    extra is not installed (pip install slide-anki-mcp[ocr]) or OCR fails."""
+    try:
+        import winocr
+    except ImportError:
+        return ""
+    lines: list = []
+    for image in page.images:
+        try:
+            img = image.image.convert("RGB")
+            if img.width < 200 or img.height < 100:
+                continue
+            found = {}
+            for lang in ("en", "ar"):
+                try:
+                    with ThreadPoolExecutor(1) as pool:  # winocr calls asyncio.run: not inside the server's loop
+                        found[lang] = pool.submit(winocr.recognize_pil_sync, img, lang).result()["lines"]
+                except Exception:  # that OCR language is not installed in Windows
+                    found[lang] = []
+        except Exception:
+            continue
+        ar = " ".join(ln["text"] for ln in found["ar"])
+        letters = len(re.findall(r"[^\W\d_]", ar))
+        if letters and len(re.findall(f"[{_AR}]", ar)) > 0.3 * letters:
+            lines += _ocr_rtl_rows(found["ar"])
+        else:
+            lines += [ln["text"] for ln in found["en"]]
+    return "\n".join(lines)
+
+
 def read_slides(pdf_path: str) -> list[str]:
-    """Return the text of each page (slide), index 0 = slide 1."""
+    """Return the text of each page (slide), index 0 = slide 1.
+
+    A page with no text layer is read by OCR when the optional extra is
+    installed; its text is an ``OcrText`` so callers can warn about it."""
     if Path(pdf_path).is_dir():
         raise ValueError(f"{pdf_path} is a folder: give the full path of the PDF file")
     try:
@@ -170,7 +252,25 @@ def read_slides(pdf_path: str) -> list[str]:
     flip = any(_INDIC_RUN.fullmatch(c.strip()) and len(c.strip()) > 1 and c.strip()[0] == "\u0660"
                for page in chunks for c in page)  # a number starting with ٠: written backwards
     texts = [_join_chunks(c, flip).strip() for c in chunks]
-    return [_reorder(t) if _PRESENTATION_FORMS.search(t) else t for t in texts]
+    texts = [_reorder(t) if _PRESENTATION_FORMS.search(t) else t for t in texts]
+    stat = Path(pdf_path).stat()
+    for i, page in enumerate(pages):
+        if not _has_text(texts[i]):
+            key = (str(Path(pdf_path).resolve()), stat.st_mtime_ns, stat.st_size, i)
+            ocr = _OCR_CACHE.get(key) or _ocr_page(page)  # every tool call reads the PDF again; OCR is slow
+            if ocr:
+                _OCR_CACHE[key] = ocr
+                texts[i] = OcrText(ocr)
+    return texts
+
+
+def _looks_damaged(text: str) -> bool:
+    """Control characters, or Latin Extended-B letters on an Arabic page (such as
+    U+01C4 in a MuPDF Arabic PDF), mean the PDF maps its glyphs to wrong letters."""
+    bad = sum(1 for ch in text if ord(ch) < 32 and ch not in "\n\r\t")
+    if re.search(f"[{_AR}]", text) or _PRESENTATION_FORMS.search(text):
+        bad += len(re.findall("[\u0180-\u024F]", text))
+    return bad >= 3
 
 
 def _has_text(slide: str) -> bool:
@@ -184,6 +284,10 @@ def slide_overview(slides: list[str]) -> list[dict]:
         warning = None
         if not _has_text(text):
             warning = "slide has no text, cannot verify cards against it"
+        elif getattr(text, "ocr", False):
+            warning = "text read by OCR from a picture: OCR can misread letters, check each quote against the slide"
+        elif _looks_damaged(text):
+            warning = "text layer looks damaged (wrong or reversed letters): copy quotes from get_slide and check them"
         elif "�" in text:
             warning = f"{text.count(chr(0xFFFD))} unreadable character(s) shown as �; they match '-' only"
         elif len(text) < MIN_TEXT_CHARS:
@@ -240,6 +344,8 @@ def check_card(card: dict, slides: list[str]) -> dict:
         _fail(result, "the back stops in the middle of a list: the evidence goes on with more items, include them all")
     elif any(_NEGATION.search(ev_t[: h.start()]) for h in hits):
         _fail(result, "the evidence has not/no/without or an arrow just before the back: include it in the back, because it changes the meaning")
+    if getattr(slide, "ocr", False):
+        result["ocr"] = True  # the quote matched OCR text, which can be misread
     if not result["ok"]:
         result["slide_text"] = slide[:3000]
     return result

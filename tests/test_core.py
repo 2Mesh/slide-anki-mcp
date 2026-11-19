@@ -445,3 +445,67 @@ def test_chromium_visual_order_is_put_back():
 def test_powerpoint_list_number_glued_to_english():
     line = core._join_chunks(["\n", ".", "3", "ADH ", "هو الهرمون المضاد لإدرار البول"], flip_indic=False)
     assert _ar(line, "ADH", "ADH هو الهرمون المضاد لإدرار البول")
+
+
+# ---- damaged text layers and OCR (the OCR engine is faked, so no extra is needed) ----
+
+def test_damaged_text_layer_warning():
+    dz, ff = chr(0x1C4), chr(12)
+    # start of the real text of an Arabic PDF made by MuPDF: reversed letters, U+01C4 and a control character
+    mupdf = f"ﺯﺮﻔﻳ ﺍ{dz}ﻥﻮﻣﺮﻬ ﺍ{dz}ﺩﺎﻀﻤ ƾ{ff}ﺭﺍﺭﺩ ﺍ{dz}ﻝﻮﺒ ﻦﻣ ﺍ{dz}ﺀﺎﻃﻮ\nﺍ{dz}ﻡﻮﻳﺩﻮﺼ ﺍ{dz}ﻲﻌﻴﺒﻄ 135-145 mmol/L"
+    assert "damaged" in core.slide_overview([mupdf])[0]["warning"]
+    fine = ["ﯾﻔرز اﻟﮭرﻣون ADH ﻣن اﻟوطﺎء والصوديوم الطبيعي 135-145 mmol/L",
+            "Galactosemia: GALT, GALK, GALE and the classic enzyme defects",
+            "Romanian keeps ș and ț in words such as știință and țară in text"]
+    assert all(o["warning"] is None for o in core.slide_overview(fine))
+
+
+def test_ocr_arabic_rows_are_put_in_reading_order():
+    assert core._ocr_rtl("mmol/L 145-135 الطبيعي الصوديوم") == "الصوديوم الطبيعي 135-145 mmol/L"
+    assert core._ocr_rtl("mmHg 80/120 الطبيعي الدم ضغط") == "ضغط الدم الطبيعي 120/80 mmHg"
+    assert core._ocr_rtl("Galactose is a monosaccharide") == "Galactose is a monosaccharide"
+
+    def line(text, x0, x1, y):
+        return {"text": text, "words": [{"bounding_rect": {"x": x0, "y": y, "width": x1 - x0, "height": 26}}]}
+    # real boxes from Windows OCR on a scanned Word page: one line came back as two parts
+    rows = core._ocr_rtl_rows([line("ثانية ٤٥", 136, 213, 150), line("مختصر شرح سيناريو", 260, 470, 152),
+                               line("خمس بهدوء نجلس", 137, 900, 214)])
+    assert rows[0] == "سيناريو شرح مختصر ٤٥ ثانية"
+    assert _ar(rows[0], "٤٥ ثانية", "سيناريو شرح مختصر — ٤٥ ثانية")
+    assert not _ar(rows[0], "٥٤ ثانية", "سيناريو شرح مختصر — ٥٤ ثانية")
+
+
+def test_page_without_text_is_read_by_ocr_and_marked(tmp_path, monkeypatch):
+    import sys
+    import types
+    pil = pytest.importorskip("PIL.Image")
+    from reportlab.lib.utils import ImageReader
+    img = tmp_path / "slide.png"
+    pil.new("RGB", (800, 400), "white").save(img)
+    pdf = tmp_path / "scan.pdf"
+    c = canvas.Canvas(str(pdf))
+    c.drawImage(ImageReader(str(img)), 0, 0, 400, 200)
+    c.showPage()
+    c.save()
+    monkeypatch.setitem(sys.modules, "winocr", None)  # as if the extra were not installed
+    assert "no text" in core.slide_overview(core.read_slides(str(pdf)))[0]["warning"]
+
+    import asyncio
+
+    async def lines(lang):
+        return [{"text": "Galactose is a monosaccharide (simple sugar).", "words": []}] if lang == "en" else []
+
+    fake = types.ModuleType("winocr")  # like winocr, the fake calls asyncio.run
+    fake.recognize_pil_sync = lambda image, lang: {"lines": asyncio.run(lines(lang))}
+    monkeypatch.setitem(sys.modules, "winocr", fake)
+
+    async def inside_server_loop():  # the MCP server calls tools while its event loop runs
+        return core.read_slides(str(pdf))
+    slides = asyncio.run(inside_server_loop())
+    assert getattr(slides[0], "ocr", False)
+    assert "OCR" in core.slide_overview(slides)[0]["warning"]
+    res = core.check_card({"front": "f", "back": "a monosaccharide", "slide": 1,
+                           "evidence": "Galactose is a monosaccharide (simple sugar)."}, slides)
+    assert res["ok"] and res["ocr"]
+    assert not core.check_card({"front": "f", "back": "a disaccharide", "slide": 1,
+                                "evidence": "Galactose is a disaccharide (simple sugar)."}, slides)["ok"]

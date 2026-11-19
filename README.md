@@ -98,7 +98,7 @@ If Claude cannot find the command, put its full path in `"command"`. Get the pat
 - **Units that differ only in case.** Case is ignored, so `mM` and `mm`, or `Mg` and `mg`, count as the same.
 - **Quotes that start right after a dash or sign.** If a slide line reads `Beverages -1000-1500 ml`, the quote has to include the dash. A quote that cuts a number, unit or range in the middle (`135` from `135-145 mmol/L`, `500 ml` from `1,500 ml`, `80 mmHg` from `120/80 mmHg`) is rejected.
 - **Paraphrases.** A correct answer in other words is rejected. Copy the slide's wording. Small differences such as "200mL" on the slide and "200 mL" in the card are also rejected.
-- **Images.** Text inside pictures, scanned pages and diagrams is not read, and cards that cite those slides are rejected. On one real 40-slide lecture, 4 slides had no text at all and 7 more had under 40 characters, mostly section titles.
+- **Images.** Text inside pictures and diagrams is not read. Scanned pages with no text can be read by OCR on Windows only: `pip install slide-anki-mcp[ocr]` (uses the OCR built into Windows 10/11; Arabic needs the Arabic OCR language). Such slides are marked in `list_slides`, and their cards come back with `"ocr": true`. On two scanned test files and one scanned real Arabic Word document, 46 of 49 correct cards passed and 0 of 46 wrong ones; the misses were a misread `50%` and table rows. OCR runs only on pages with no text layer, so a picture on a slide that has some text is still not read. Without the extra, or on macOS and Linux, scanned slides are rejected. On one real 40-slide lecture, 4 slides had no text at all and 7 more had under 40 characters, mostly section titles.
 - **Glued words.** When a PDF glues two text boxes (`GlycerolConsequence`), a quote that starts at the second box is still accepted. Glue between two lowercase letters or capitals only is not split.
 - **Unreadable characters.** A character the PDF cannot map (`�`) matches a minus sign only, because that is what it was on the lecture I tested. `list_slides` warns about such slides. A slide that really has another symbol there could let a quote with `-` pass.
 - **Bad text extraction.** If the PDF stores text in an odd way, the extracted words can be split or out of order, and correct cards will fail.
@@ -119,14 +119,14 @@ Known trade-offs and gaps:
 - Word drops `-` and `/` between numbers. On a slide with neither between numbers, `١٢٠/٨٠`, `١٢٠-٨٠` and `١٢٠ ٨٠` count as the same.
 - Reversed Arabic-Indic numbers in Word are detected from one signal (a backwards number starting with ٠ somewhere in the file). Without it, those numbers are not flipped.
 - A scanned PDF (pages that are only pictures) is rejected on every card with "slide has no text, cannot verify"; tested on a real lecture rendered to images. It is not read.
-- Fails: an Arabic PDF made with PyMuPDF (MuPDF) HTML. Its text layer holds letters in reversed visual order and some wrong characters, so exact quotes fail. Only text copied from `get_slide` would match.
+- Fails: an Arabic PDF made with PyMuPDF (MuPDF) HTML. Its text layer holds letters in reversed visual order and some wrong characters, so exact quotes fail. `list_slides` now warns when a text layer looks damaged like this; only text copied from `get_slide` would match.
 - Not tested: Google Docs or Slides export, LibreOffice, macOS (Preview, Pages, Keynote).
 
 ## Roadmap
 
 These are real gaps, not promises:
 
-- **OCR for image slides**, so text in pictures and scanned decks can be checked.
+- **OCR on macOS and Linux.** It works on Windows only for now.
 - **Meaning-aware checking**, so a correct paraphrase can pass and a phrase taken out of context can be caught.
 - **Testing on more real Arabic lectures (Word, PowerPoint, scans) and a real Anki import.**
 
