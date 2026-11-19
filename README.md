@@ -1,6 +1,6 @@
 # slide-anki-mcp
 
-[![tests](https://github.com/sasssssn/slide-anki-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/sasssssn/slide-anki-mcp/actions/workflows/test.yml)
+[![tests](https://github.com/2Mesh/slide-anki-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/2Mesh/slide-anki-mcp/actions/workflows/test.yml)
 
 An MCP server for students who study from lecture slides. It makes Claude (or any MCP client) quote the slide for every Anki card, and it rejects a card when the quote is not really on that slide.
 
@@ -12,7 +12,7 @@ Study tools often write cards from the model's own knowledge. If your exam is gr
 ## Quick start
 
 ```bash
-pip install git+https://github.com/sasssssn/slide-anki-mcp
+pip install git+https://github.com/2Mesh/slide-anki-mcp
 claude mcp add slide-anki -- slide-anki-mcp
 ```
 
