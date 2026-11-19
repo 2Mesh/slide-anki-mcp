@@ -52,7 +52,8 @@ def _text(s: str, join_hyphen: bool = True, split_joined: bool = False) -> str:
     return re.sub(r"\s+", " ", s).strip().casefold().strip(" .;:,")
 
 
-_NEGATION = re.compile(r"(?:(?:^|[\s(\[])(?:not|no|never|without|non|cannot|neither|nor)|n't|[↑↓])\s+$")
+_NEGATION = re.compile(r"(?:(?:^|[\s(\[])(?:not|no|never|without|non|cannot|neither|nor"
+                       r"|لا|ليس|ليست|لم|لن|غير|بدون|دون)|n't|[↑↓])\s+$")
 _MORE = re.compile(r"\s*,\s*(?!etc\b|e\.g\b|i\.e\b)\S")
 
 
@@ -72,6 +73,82 @@ def _contains(haystack: str, needle: str) -> bool:
     return bool(_matches(haystack, needle))
 
 
+# ---- Arabic PDFs ------------------------------------------------------------
+_AR = "\u0600-\u06FF"
+_PRESENTATION_FORMS = re.compile("[\uFB50-\uFDFF\uFE70-\uFEFF]")  # Chromium (Edge, Chrome) prints these
+_INDIC_RUN = re.compile("[\u0660-\u0669]+")
+_JOINABLE = re.compile(f"[{_AR}0-9]")
+_UNITS = re.compile(rf"(?:[^A-Za-z0-9{_AR}\s][^A-Za-z0-9{_AR}]*)?[{_AR}](?:[^A-Za-z0-9]*[{_AR}])*[^A-Za-z0-9{_AR}]*"
+                    r"|[A-Za-z][A-Za-z0-9/+().'-]*(?: +[A-Za-z(][A-Za-z0-9/+().'-]*)*|\d+(?:[.,/:]\d+)*|\S")
+
+
+def _page_chunks(page) -> list:
+    chunks: list = []
+    page.extract_text(visitor_text=lambda text, *_: chunks.append(text) if text else None)
+    return chunks
+
+
+def _join_chunks(chunks: list, flip_indic: bool) -> str:
+    """Join pypdf's text pieces. Word writes each Arabic word as its own piece with
+    no space glyph, and can write Arabic-Indic numbers backwards ("٠٣" for "٣٠")."""
+    out, arabic = "", any(re.search(f"[{_AR}]", c) for c in chunks)
+    for text in chunks:
+        core = text.strip()
+        if flip_indic and _INDIC_RUN.fullmatch(core):
+            text = text.replace(core, core[::-1])
+        if out and (_JOINABLE.match(out[-1]) and _JOINABLE.match(text[0])
+                    or arabic and out[-1].isdigit() and text[0].isascii() and text[0].isalpha()):
+            out += " "  # PowerPoint glues a list number to the next piece: ".3ADH"
+        out += text
+    return out
+
+
+def _visual_to_logical(line: str) -> str:
+    """Chromium writes a right-to-left line from left to right: its Arabic, English
+    and number pieces come in reverse order ("mmol/L 145-135 الصوديوم"). Reverse them."""
+    if not re.search(f"[{_AR}]", line) or not re.search("[A-Za-z0-9]", line):
+        return line
+    units = [u.strip() for u in _UNITS.findall(line)][::-1]
+    out = ""
+    for i, u in enumerate(units):
+        glue = (u in ("-", "+") and i and units[i - 1][-1:].isdigit()) or (out[-1:] in ("-", "+") and u[:1].isdigit())
+        out += u if not out or glue else " " + u
+    return out
+
+
+def _reorder(slide: str) -> str:
+    return "\n".join(_visual_to_logical(line) for line in slide.splitlines())
+
+
+def _loose_words(t: str, drop_number_signs: bool) -> list:
+    t = re.sub(r"(?<!\d)[.,]|[.,](?!\d)|[^\w\s%+<>=^↑↓×±≤≥°/.,-]", " ", t)  # punctuation PDFs lose
+    if drop_number_signs:  # Word can lose the "-" or "/" between two numbers
+        t = re.sub(r"(?<=\d)\s*[-/]\s*(?=\d)", " ", t)
+    return t.split()
+
+
+def _loose_join(words: list) -> str:
+    out = ""
+    for w in words:
+        out += ("|" if out[-1:].isdigit() and w[:1].isdigit() else "") + w
+    return out
+
+
+def _arabic_loose_match(slide_t: str, ev_t: str) -> bool:
+    """For an Arabic quote: ignore spaces and punctuation, keep every letter, digit
+    and sign in order. The quote must start and end where a slide word starts and ends."""
+    drop = not re.search(r"\d\s*[-/]\s*\d", slide_t)
+    words, target = _loose_words(slide_t, drop), _loose_join(_loose_words(ev_t, drop))
+    for i in range(len(words)):
+        for j in range(i, len(words)):
+            acc = _loose_join(words[i:j + 1])
+            if acc == target:
+                return True
+            if not target.startswith(acc):
+                break
+    return False
+
+
 def read_slides(pdf_path: str) -> list[str]:
     """Return the text of each page (slide), index 0 = slide 1."""
     if Path(pdf_path).is_dir():
@@ -89,7 +166,11 @@ def read_slides(pdf_path: str) -> list[str]:
         raise ValueError(f"cannot read {pdf_path} as a PDF: {exc}") from None
     if not pages:
         raise ValueError("PDF has no pages")
-    return [(page.extract_text() or "").strip() for page in pages]
+    chunks = [_page_chunks(page) for page in pages]
+    flip = any(_INDIC_RUN.fullmatch(c.strip()) and len(c.strip()) > 1 and c.strip()[0] == "\u0660"
+               for page in chunks for c in page)  # a number starting with ٠: written backwards
+    texts = [_join_chunks(c, flip).strip() for c in chunks]
+    return [_reorder(t) if _PRESENTATION_FORMS.search(t) else t for t in texts]
 
 
 def _has_text(slide: str) -> bool:
@@ -147,8 +228,11 @@ def check_card(card: dict, slides: list[str]) -> dict:
     slide_t, ev_t, back_t = _text(slide), _text(evidence), _text(back)
     if len(ev_t.split()) < MIN_EVIDENCE_WORDS:
         _fail(result, f"evidence too short: quote a full sentence or line (at least {MIN_EVIDENCE_WORDS} words)")
-    elif not any(_contains(_text(slide, join_hyphen=j, split_joined=sp), ev_t)
-                 for j, sp in ((True, False), (False, False), (True, True))):
+    elif not (any(_contains(_text(slide, join_hyphen=j, split_joined=sp), ev_t)
+                  for j, sp in ((True, False), (False, False), (True, True)))
+              or (_PRESENTATION_FORMS.search(slide) and _contains(_text(_reorder(slide)), ev_t))
+              or (re.search(f"[{_AR}]", ev_t)
+                  and _arabic_loose_match(_text(slide.replace("\u2014", " ")), _text(evidence.replace("\u2014", " "))))):
         _fail(result, "evidence is not on this slide exactly as quoted")
     elif not (hits := _matches(ev_t, back_t)):
         _fail(result, "the back is not inside the evidence quote")

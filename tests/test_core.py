@@ -390,3 +390,58 @@ def test_advisor_false_reject_cases():
     assert _ok("ACE inhibitors (enalapril, captopril, etc.) lower BP", "enalapril, captopril")
     assert _ok("Answer yes/no questions only in this test", "questions only")
     assert not _ok("Galactose (not essential in the diet)", "essential in the diet")
+
+
+# ---- Arabic PDFs from Word, PowerPoint, Edge and Chrome (real extracted pieces) ----
+
+def _ar(slide, back, ev):
+    return core.check_card({"front": "f", "back": back, "evidence": ev, "slide": 1}, [slide])["ok"]
+
+
+def test_word_arabic_words_without_spaces_and_backwards_numbers():
+    # pypdf pieces from a real Word export: one piece per word, no space glyph, ٣٠ written as ٠٣
+    line = core._join_chunks(["قد", "لا", "تشعر", "به", " ", "\n", "الهدف", "رفع", "الوعي", "بأن", "غياب",
+                              "الأعراض", "لا", "يعني", "أن"], flip_indic=True)
+    assert line.startswith("قد لا تشعر به")
+    nums = core._join_chunks(["على", "شكل", "رقمين،", "مثل", "٠٢١", "٠٨", "الرقم"], flip_indic=True)
+    assert nums == "على شكل رقمين، مثل ١٢٠ ٨٠ الرقم"
+    assert _ar(nums, "١٢٠/٨٠", "على شكل رقمين، مثل ١٢٠/٨٠")  # Word dropped the "/"
+    assert not _ar(nums, "٨٠/١٢٠", "على شكل رقمين، مثل ٨٠/١٢٠")
+    refs = core._join_chunks(["التوثيق", "العلمي", "لهذا", "البنر", "1", "4", " "], flip_indic=True)
+    assert _ar(refs, "[1–4]", "التوثيق العلمي لهذا البنر: [1–4].")  # Word dropped "[", "–", "]"
+    assert not _ar(refs, "[14]", "التوثيق العلمي لهذا البنر: [14].")
+
+
+def test_arabic_quote_ignores_lost_spaces_and_punctuation_but_not_words():
+    slide = "النصوصالمعلَّمةبـجاهزللطباعةهيالنسخةالمقترحةللبنرين"  # glued, quotes « » lost
+    q = "النصوص المعلَّمة بـ«جاهز للطباعة» هي النسخة المقترحة للبنرين."
+    assert _ar(slide, "النسخة المقترحة للبنرين", q)
+    assert _ar(slide, "النسخة المقترحة للبنرين", "النصوص المعلمة بـ«جاهز للطباعة» هي النسخة المقترحة للبنرين")
+    assert not _ar(slide, "النسخة المقترحة للبنرين", q.replace("المقترحة", "النهائية"))
+    spaced = "قد تشعر أنك بخير تمامًا، ومع ذلك قد يكون ضغط دمك مرتفعًا"
+    assert not _ar(spaced, "أنك بخير", "شعر أنك بخير تمامًا")  # starts inside a word
+    assert not _ar("درجة الحرارة - 5 درجات تحت الصفر", "5 درجات", "درجة الحرارة 5 درجات تحت الصفر")
+
+
+def test_arabic_negation_before_the_back():
+    ev = "الجلوكوز لا يظهر في البول عند الأصحاء"
+    assert not _ar(ev, "يظهر في البول", ev)
+    assert _ar(ev, "لا يظهر في البول", ev)
+    assert not _ar("الأنسولين ليس هرمونا ستيرويديا", "هرمونا ستيرويديا", "الأنسولين ليس هرمونا ستيرويديا")
+
+
+def test_chromium_visual_order_is_put_back():
+    # real Edge lines after joining pieces: number/English runs come first and ranges reversed
+    assert core._visual_to_logical("mmol/L 145-135 اﻟﺻودﯾوم اﻟطﺑﯾﻌﻲ") == "اﻟﺻودﯾوم اﻟطﺑﯾﻌﻲ 135-145 mmol/L"
+    assert core._visual_to_logical("ﻣن اﻟوطﺎء ADH ﯾﻔرز اﻟﮭرﻣون") == "ﯾﻔرز اﻟﮭرﻣون ADH ﻣن اﻟوطﺎء"
+    slide = core._visual_to_logical("mmol/L 2.6-2.2 واﻟﻛﺎﻟﺳﯾوم mmol/L 5.0-3.5 اﻟﺑوﺗﺎﺳﯾوم اﻟطﺑﯾﻌﻲ")
+    good = "البوتاسيوم الطبيعي 3.5-5.0 mmol/L والكالسيوم 2.2-2.6 mmol/L"
+    assert _ar(slide, "2.2-2.6 mmol/L", good)
+    assert not _ar(slide, "2.2-2.6 mmol/L", "البوتاسيوم الطبيعي 2.2-2.6 mmol/L والكالسيوم 3.5-5.0 mmol/L")
+    assert core._visual_to_logical("% ﺗﻘرﯾﺑﺎ 50 ﯾرﺗﻔﻊ ﺑﻧﺳﺑﺔ") == "ﯾرﺗﻔﻊ ﺑﻧﺳﺑﺔ 50 % ﺗﻘرﯾﺑﺎ"
+    assert core._visual_to_logical("Normal sodium is 135-145 mmol/L") == "Normal sodium is 135-145 mmol/L"
+
+
+def test_powerpoint_list_number_glued_to_english():
+    line = core._join_chunks(["\n", ".", "3", "ADH ", "هو الهرمون المضاد لإدرار البول"], flip_indic=False)
+    assert _ar(line, "ADH", "ADH هو الهرمون المضاد لإدرار البول")
