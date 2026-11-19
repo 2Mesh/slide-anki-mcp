@@ -197,7 +197,7 @@ def test_server_export_checks_before_writing(tmp_path):
     assert res["written"] is None and res["rejected_card_indexes"] == [1]
     assert not (tmp_path / "o.tsv").exists()
     with pytest.raises(ValueError, match=".tsv"):
-        server.export_anki(str(pdf), [good], str(tmp_path / "victim.cfg"), allow_unchecked_questions=True)
+        server.export_anki(str(pdf), [good], str(tmp_path / "victim.cfg"), reviewed_indexes=[0])
 
 
 def test_export_skips_duplicates_ignoring_case_and_spaces(tmp_path):
@@ -206,7 +206,7 @@ def test_export_skips_duplicates_ignoring_case_and_spaces(tmp_path):
     one = card("two cusps", "Mitral valve has two cusps", front="Cusps?")
     same = {**one, "front": "Cusps? ", "back": "Two  cusps"}
     other = {**one, "front": "Mitral cusps?"}
-    res = server.export_anki(str(pdf), [one, other, same], str(tmp_path / "o.tsv"), allow_unchecked_questions=True)
+    res = server.export_anki(str(pdf), [one, other, same], str(tmp_path / "o.tsv"), reviewed_indexes=[0, 1, 2])
     assert res["count"] == 2 and res["duplicates_skipped"] == [2]
     assert len(rows(res["written"])[1]) == 2
 
@@ -590,3 +590,24 @@ def test_cloze_holes_found_by_the_advisor():
     assert r["front"] == "___ activates AMPK while cAMP activates PKA"
     assert not _cl("The mitral valve has two cusps", "The", "The mitral valve has two cusps")["ok"]
     assert not _cl("The mitral valve has two cusps", "The mitral valve has two cusps", "The mitral valve has two cusps")["ok"]
+
+
+def test_cloze_whole_line_gets_the_slide_title_and_bad_quote_gets_a_suggestion():
+    slide = "Gluconeogenesis substrates\nlactate and glycerol and alanine\nSecond line here"
+    r = _cl(slide, "lactate and glycerol and alanine", "lactate and glycerol and alanine")
+    assert r["status"] == "verified" and r["front"] == "Gluconeogenesis substrates \u2014 ___"
+    assert r["front"].replace("___", "lactate and glycerol and alanine") == "Gluconeogenesis substrates — lactate and glycerol and alanine"
+    r = _cl("Alanine is made in muscle and sent to liver", "made in muscle", "Alanine was made in muscle and sent to liver")
+    assert not r["ok"] and r["suggested_quote"] == "Alanine is made in muscle and sent to liver"
+
+
+def test_reviewed_indexes_write_free_questions_with_a_tag_and_suggest_a_cloze(tmp_path):
+    ev = "The mitral valve has two cusps and the aortic valve has three"
+    pdf = tmp_path / "lec.pdf"
+    make_pdf(pdf, [[ev]])
+    free = {"front": "Cusps of the mitral valve?", "back": "two cusps", "slide": 1, "evidence": ev}
+    res = server.export_anki(str(pdf), [free], str(tmp_path / "a.tsv"))
+    assert res["written"] is None and res["needs_review_indexes"] == [0]
+    assert res["suggested_cloze_fronts"][0] == "The mitral valve has ___ and the aortic valve has three"
+    res = server.export_anki(str(pdf), [free], str(tmp_path / "b.tsv"), reviewed_indexes=[0])
+    assert res["count"] == 1 and "reviewed" in (tmp_path / "b.tsv").read_text(encoding="utf-8")

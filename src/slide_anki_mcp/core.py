@@ -343,20 +343,45 @@ def _grade(result: dict, card: dict, cloze: bool, slide: str) -> None:
     'needs_review'. OCR text is never 'verified'."""
     if not cloze:
         result["status"] = "needs_review"
+        trial = {"ok": True, "unsupported": []}  # what a cloze card from the same quote would look like
+        _grade(trial, card, True, slide)
+        if trial.get("status") == "verified":
+            result["suggested_cloze_front"] = trial["front"]
         return
     quote, back = " ".join(card["evidence"].split()), " ".join(card["back"].split())
+    pattern = (r"(?<!\w)" if back[0].isalnum() else "") + re.escape(back) + (r"(?!\w)" if back[-1].isalnum() else "")
     context = _slide_line_context(slide, quote)
     if not context:
         _fail(result, "a cloze card needs the quote exactly as on the slide, same letters and signs: copy it from get_slide")
+        _suggest(result, slide, pattern)
         return
-    pattern = (r"(?<!\w)" if back[0].isalnum() else "") + re.escape(back) + (r"(?!\w)" if back[-1].isalnum() else "")
     front, hits = re.subn(pattern, "___", context)
     if not hits:
         _fail(result, "cannot build a cloze card: the back must appear in the quote exactly as written, as whole words")
-    elif back.lower() in _STOP or len(re.findall(r"\w+", front.replace("___", " "))) < 2:
-        _fail(result, "cloze back is too small or is the whole quote: the blank would have no context")
-    else:
-        result["status"], result["front"] = ("needs_review" if getattr(slide, "ocr", False) else "verified"), front
+        _suggest(result, slide, pattern)
+        return
+    if "___" in context:
+        _fail(result, "the slide itself contains ___, so the blank would be ambiguous")
+        return
+    if back.lower() in _STOP or len(re.findall(r"\w+", front.replace("___", " "))) < 2:
+        title = " ".join(next((ln for ln in slide.splitlines() if ln.strip()), "").split())
+        if not title or title in context or back.lower() in _STOP:
+            _fail(result, "cloze back is too small or is the whole quote: the blank would have no context")
+            return
+        front = f"{title} — {front}"  # the slide's own title gives the blank a topic
+        context = f"{title} — {context}"
+    if front.replace("___", back) != context:  # the promise: filling the blank gives back the slide's own words
+        _fail(result, "internal check failed: the cloze front does not rebuild the slide line")
+        return
+    result["status"], result["front"] = ("needs_review" if getattr(slide, "ocr", False) else "verified"), front
+
+
+def _suggest(result: dict, slide: str, pattern: str) -> None:
+    """Offer the one slide line that contains the back, copied from the slide itself."""
+    lines = [" ".join(ln.split()) for ln in slide.splitlines()]
+    found = [ln for ln in dict.fromkeys(lines) if ln and re.search(pattern, ln)]
+    if len(found) == 1:
+        result["suggested_quote"] = found[0]
 
 
 def check_card(card: dict, slides: list[str]) -> dict:
@@ -398,6 +423,7 @@ def check_card(card: dict, slides: list[str]) -> dict:
               or (re.search(f"[{_AR}]", ev_t)
                   and _arabic_loose_match(_text(slide.replace("\u2014", " ")), _text(evidence.replace("\u2014", " "))))):
         _fail(result, "evidence is not on this slide exactly as quoted")
+        _suggest(result, slide, re.escape(" ".join(back.split())))
     elif not (hits := _matches(ev_t, back_t)):
         _fail(result, "the back is not inside the evidence quote")
     elif "," in back_t and all(_MORE.match(ev_t, h.end()) for h in hits):
@@ -448,5 +474,5 @@ def write_anki_tsv(cards: list[dict], out_path: str, deck_tag: str = "slides") -
         for card in cards:
             evidence = " ".join(card["evidence"].split())
             back = f"{card['back']}  |  Source (slide {card['slide']}): {evidence}"
-            writer.writerow([card["front"], back, f"{deck_tag} Slide_{card['slide']}"])
+            writer.writerow([card["front"], back, f"{deck_tag} Slide_{card['slide']}" + (" reviewed" if card.get("reviewed") else "")])
     return str(path.resolve())

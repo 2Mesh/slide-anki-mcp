@@ -34,7 +34,7 @@ async def main():
 
             async def export(cards, name):
                 res = await s.call_tool("export_anki", {"pdf_path": str(pdf), "cards": cards,
-                                                        "out_path": str(d / name), "allow_unchecked_questions": True})
+                                                        "out_path": str(d / name), "reviewed_indexes": list(range(len(cards)))})
                 return res
 
             ok = json.loads((await export(good, "o.tsv")).content[0].text)
@@ -47,7 +47,7 @@ async def main():
             assert again.isError  # an existing file is never overwritten
             body = [ln for ln in (d / "o.tsv").read_text(encoding="utf-8").splitlines() if not ln.startswith("#")]
             row = next(csv.reader(body, delimiter="\t"))
-            assert row[0] == "How many cusps?" and ev in row[1] and row[2] == "slides Slide_1", row
+            assert row[0] == "How many cusps?" and ev in row[1] and row[2] == "slides Slide_1 reviewed", row
             print("E2E OK")
 
 

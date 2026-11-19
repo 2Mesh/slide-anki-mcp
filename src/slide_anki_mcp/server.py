@@ -45,14 +45,15 @@ def check_cards(pdf_path: str, cards: list[dict]) -> list[dict]:
 
 
 @mcp.tool()
-def export_anki(pdf_path: str, cards: list[dict], out_path: str, allow_unchecked_questions: bool = False) -> dict:
+def export_anki(pdf_path: str, cards: list[dict], out_path: str, reviewed_indexes: list[int] | None = None) -> dict:
     """Write cards to a new Anki-importable .tsv, only if every card passes check_cards.
 
     By default only cloze cards (status "verified", front built from the quote) are
     written: a card with its own front is refused and listed in 'needs_review_indexes',
-    because nothing checks that its question matches its quote. Pass
-    allow_unchecked_questions=true only after a person has read each question next
-    to its quote.
+    because nothing checks that its question matches its quote. check_cards gives
+    each of them a 'suggested_cloze_front' when one can be built. Pass the indexes
+    in reviewed_indexes only after a person has read that question next to its
+    quote: those cards are written and tagged 'reviewed'.
     out_path must end with .tsv, be in an existing folder, and must not exist yet.
     The evidence quote and slide number are written at the end of each answer.
     Duplicates (same front and back, ignoring case and extra spaces) are written once; the indexes of the
@@ -68,11 +69,15 @@ def export_anki(pdf_path: str, cards: list[dict], out_path: str, allow_unchecked
     if bad:
         return {"written": None, "rejected_card_indexes": bad, "details": [checks[i] for i in bad]}
     cards = [{**c, "front": k["front"]} if k.get("status") == "verified" else c for c, k in zip(cards, checks)]
+    ok_to_write = set(reviewed_indexes or [])
     review = [i for i, k in enumerate(checks) if k.get("status") != "verified"]
-    if review and not allow_unchecked_questions:
-        return {"written": None, "needs_review_indexes": review,
+    open_review = [i for i in review if i not in ok_to_write]
+    if open_review:
+        return {"written": None, "needs_review_indexes": open_review,
+                "suggested_cloze_fronts": {i: checks[i]["suggested_cloze_front"] for i in open_review if "suggested_cloze_front" in checks[i]},
                 "message": "these cards have their own question, which nothing checks against the quote: "
-                           "send them with \"cloze\": true (no front), or set allow_unchecked_questions=true after reading each one"}
+                           "send them with \"cloze\": true (no front), or list their indexes in reviewed_indexes after reading each question next to its quote"}
+    cards = [{**c, "reviewed": True} if i in ok_to_write and i in review else c for i, c in enumerate(cards)]
     seen, unique, dupes = set(), [], []
     for i, c in enumerate(cards):
         key = core.card_key(c)
@@ -82,7 +87,7 @@ def export_anki(pdf_path: str, cards: list[dict], out_path: str, allow_unchecked
             seen.add(key)
             unique.append(c)
     return {"written": core.write_anki_tsv(unique, out_path), "count": len(unique),
-            "duplicates_skipped": dupes, "needs_review_indexes": review}
+            "duplicates_skipped": dupes, "reviewed_indexes": sorted(ok_to_write & set(review))}
 
 
 def main() -> None:
