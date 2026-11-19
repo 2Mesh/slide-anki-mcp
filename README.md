@@ -12,13 +12,13 @@ Study tools often write cards from the model's own knowledge. If your exam is gr
 ## Quick start
 
 ```bash
-pip install git+https://github.com/2Mesh/slide-anki-mcp
+pip install slide-anki-mcp
 claude mcp add slide-anki -- slide-anki-mcp
 ```
 
 Then ask Claude: "Read C:\lectures\renal.pdf with slide-anki. Make cards from slides 3 to 10, quote each slide in the evidence field, and export to C:\lectures\renal.tsv." Give the full path to the PDF. Import the `.tsv` in Anki with File → Import.
 
-Needs Python 3.10 or newer. It is not on PyPI yet, so install from GitHub as above.
+Needs Python 3.10 or newer. Also on PyPI: https://pypi.org/project/slide-anki-mcp/
 
 ## Tools
 
