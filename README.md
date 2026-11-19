@@ -16,7 +16,7 @@ pip install slide-anki-mcp
 claude mcp add slide-anki -- slide-anki-mcp
 ```
 
-Then ask Claude: "Read C:\lectures\renal.pdf with slide-anki. Make cards from slides 3 to 10, quote each slide in the evidence field, and export to C:\lectures\renal.tsv." Give the full path to the PDF. Import the `.tsv` in Anki with File → Import.
+Then ask Claude: "Read C:\lectures\renal.pdf with slide-anki. Make cards from slides 3 to 10, quote each slide in the evidence field, and export to C:\lectures\renal.tsv." Give the full path to the PDF. It reads PDF only: for a PowerPoint deck, use File → Save As → PDF first (tried once with PowerPoint on a 31-slide deck, all slides had text). Import the `.tsv` in Anki with File → Import.
 
 Needs Python 3.10 or newer. Also on PyPI: https://pypi.org/project/slide-anki-mcp/
 
