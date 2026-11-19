@@ -238,3 +238,30 @@ def test_arabic_slide_matches(tmp_path):
     assert core.check_card(card(full, full), slides)["ok"]
     assert core.check_card(card("تُنظّم توازن", full), slides)["ok"]
     assert not core.check_card(card("القلب ينظم توازن الماء", "القلب ينظم توازن الماء"), slides)["ok"]
+
+
+# ---- review round 2: cuts inside a token, invisible characters ------------
+
+def test_quote_or_back_cut_inside_a_number_or_unit_is_rejected():
+    slide = "Normal sodium is 135-145 mmol/L\nPump moves Na+ out\nCount is 14.5 per mL"
+    assert not check(slide, "135", "Normal sodium is 135")["ok"]
+    assert not check("Dose 140 mmol/L daily", "140 mmol", "Dose 140 mmol")["ok"]
+    assert not check(slide, "14", "Count is 14")["ok"]
+    assert not check(slide, "Na", "Pump moves Na")["ok"]
+    assert check(slide, "135-145 mmol/L", "Normal sodium is 135-145 mmol/L")["ok"]
+    assert check(slide, "Na+", "Pump moves Na+ out")["ok"]
+
+
+def test_invisible_characters_and_kept_hyphens_in_pdf_text():
+    soft = "con­traction needs calcium ions"
+    assert check(soft, "contraction", "contraction needs calcium ions")["ok"]
+    wrapped = "Water-\nsoluble vitamins are stored briefly"
+    assert check(wrapped, "Water-soluble vitamins", "Water-soluble vitamins are stored briefly")["ok"]
+    assert check(wrapped, "Watersoluble vitamins", "Watersoluble vitamins are stored briefly")["ok"]
+
+
+def test_directory_named_like_the_output_file_is_a_clear_error(tmp_path):
+    (tmp_path / "x.tsv").mkdir()
+    cards = [{"front": "q", "back": "A", "slide": 1, "evidence": "The mitral valve has two cusps"}]
+    with pytest.raises(ValueError):
+        core.write_anki_tsv(cards, str(tmp_path / "x.tsv"))

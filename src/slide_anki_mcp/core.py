@@ -29,7 +29,7 @@ _SUPER = str.maketrans({
 })
 
 
-def _text(s: str) -> str:
+def _text(s: str, join_hyphen: bool = True) -> str:
     """Make text comparable without losing symbols, signs or digits.
 
     Only layout is ignored: case, runs of whitespace, a word split by a hyphen
@@ -39,8 +39,8 @@ def _text(s: str) -> str:
     """
     s = s.translate(_SUPER)
     s = unicodedata.normalize("NFKC", s)
-    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
-    s = re.sub(r"(?<=[^\W\d_])-[ \t]*\r?\n[ \t]*(?=[^\W\d_])", "", s)
+    s = "".join(ch for ch in s if unicodedata.category(ch) not in ("Mn", "Cf"))
+    s = re.sub(r"(?<=[^\W\d_])-[ \t]*\r?\n[ \t]*(?=[^\W\d_])", "" if join_hyphen else "-", s)
     return re.sub(r"\s+", " ", s).strip().casefold().strip(" .;:,")
 
 
@@ -51,7 +51,8 @@ def _contains(haystack: str, needle: str) -> bool:
     """
     if not needle:
         return False
-    return re.search(r"(?<![\w.+\-<>^])" + re.escape(needle) + r"(?!\w)", haystack) is not None
+    pattern = r"(?<![\w.+\-<>^])" + re.escape(needle) + r"(?![\w^+\-/%]|[.,]\d)"
+    return re.search(pattern, haystack) is not None
 
 
 def read_slides(pdf_path: str) -> list[str]:
@@ -118,7 +119,7 @@ def check_card(card: dict, slides: list[str]) -> dict:
     slide_t, ev_t, back_t = _text(slide), _text(evidence), _text(back)
     if len(ev_t.split()) < MIN_EVIDENCE_WORDS:
         _fail(result, f"evidence too short: quote a full sentence or line (at least {MIN_EVIDENCE_WORDS} words)")
-    elif not _contains(slide_t, ev_t):
+    elif not (_contains(slide_t, ev_t) or _contains(_text(slide, join_hyphen=False), ev_t)):
         _fail(result, "evidence is not on this slide exactly as quoted")
     elif not _contains(ev_t, back_t):
         _fail(result, "the back is not inside the evidence quote")
@@ -149,6 +150,8 @@ def write_anki_tsv(cards: list[dict], out_path: str, deck_tag: str = "slides") -
         fh = path.open("x", newline="", encoding="utf-8")
     except FileExistsError:
         raise ValueError(f"file already exists, choose a new name: {path}") from None
+    except OSError as exc:  # for example a folder with that name, or no permission
+        raise ValueError(f"cannot create {path}: {exc.strerror or exc}") from None
     with fh:
         fh.write("#separator:tab\n#html:false\n#tags column:3\n")
         writer = csv.writer(fh, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_ALL)
