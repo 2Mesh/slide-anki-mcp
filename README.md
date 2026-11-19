@@ -109,9 +109,16 @@ For the numbers: an earlier version of this tool matched the answer against the 
 
 ### Arabic
 
-Tested on a PDF printed by Microsoft Edge from an Arabic web page (3 slides, small sample). Edge stores Arabic letters in Persian-style forms (`ی` for `ي`, `ھ` for `ه`), and the first version rejected every exact Arabic quote. This version treats those letters as the Arabic ones and ignores short vowel marks. After the fix, on that file: an exact Arabic quote passes, the same quote with full vowel marks passes, and a quote with one word changed fails.
+Tested on 5 Arabic PDFs from 4 producers: PowerPoint, Word (a generated file and a real document), Edge and Chrome. Each producer breaks Arabic text differently, and the tool puts it back: Word glues words without spaces and flips Arabic-Indic numbers, Edge and Chrome store letters in presentation forms in visual order, PowerPoint loses spaces next to numbers and units. For quotes that contain Arabic, spaces and punctuation are ignored, but every letter, digit and sign (`% + - / < > = ± ≤ ≥ °`) must match in order, and negation words (`لا ليس لم لن غير بدون`) must be in the back like `not` in English.
 
-Still broken on that file: a line that mixes Arabic with English or numbers comes out in a different order (`135-145 mmol/L` was extracted as `mmol/L 145-135`), so quotes of such lines fail. Quote the pure Arabic part, or copy the line from `get_slide`. Also tested only on this one producer; PDFs from Word, PowerPoint or scanners may differ. If a PDF stores Arabic in another order, Arabic cards will not match.
+On those files, 86 of 86 correct Arabic cards were accepted and 0 of 81 wrong cards (changed number, unit or word, swapped numbers, dropped `لا`, reversed digits, a cut range). The cards were written by a reviewer from the source text, so this is a small, friendly sample.
+
+Known trade-offs and gaps:
+
+- Ignoring spaces and punctuation means a merged or split Arabic word, or a missing `« » . : ؟`, still passes.
+- Word drops `-` and `/` between numbers. On a slide with neither between numbers, `١٢٠/٨٠`, `١٢٠-٨٠` and `١٢٠ ٨٠` count as the same.
+- Reversed Arabic-Indic numbers in Word are detected from one signal (a backwards number starting with ٠ somewhere in the file). Without it, those numbers are not flipped.
+- Not tested: Google Docs or Slides export, LibreOffice, macOS, scanned PDFs.
 
 ## Roadmap
 
