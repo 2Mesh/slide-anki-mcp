@@ -28,6 +28,8 @@ _SUPER = str.maketrans({
     "–": "-", "—": "-", "−": "-", "‘": "'", "’": "'", "“": '"', "”": '"',
 })
 
+_ARABIC = str.maketrans({"ی": "ي", "ى": "ي", "ھ": "ه", "ک": "ك"})
+
 
 def _text(s: str, join_hyphen: bool = True) -> str:
     """Make text comparable without losing symbols, signs or digits.
@@ -36,11 +38,14 @@ def _text(s: str, join_hyphen: bool = True) -> str:
     at a line break, dash and quote styles. Superscripts become ^n so that
     "10⁵" never turns into "105". NFKC turns Arabic presentation forms (which
     PDFs may store) back into normal letters; Arabic short vowels are dropped.
+    Persian-style yeh, heh and kaf, which some fonts produce, count as the
+    Arabic ones, and a space is added where Arabic meets Latin or digits.
     """
     s = s.translate(_SUPER)
-    s = unicodedata.normalize("NFKC", s)
+    s = unicodedata.normalize("NFKC", s).translate(_ARABIC)
     s = "".join(ch for ch in s if unicodedata.category(ch) not in ("Mn", "Cf"))
     s = re.sub(r"(?<=[^\W\d_])-[ \t]*\r?\n[ \t]*(?=[^\W\d_])", "" if join_hyphen else "-", s)
+    s = re.sub(r"(?<=[؀-ۿ])(?=[A-Za-z0-9])|(?<=[A-Za-z0-9])(?=[؀-ۿ])", " ", s)
     return re.sub(r"\s+", " ", s).strip().casefold().strip(" .;:,")
 
 

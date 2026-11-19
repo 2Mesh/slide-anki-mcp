@@ -103,7 +103,9 @@ For the numbers: an earlier version of this tool matched the answer against the 
 
 ### Arabic
 
-Arabic works on a generated test PDF (Arial or DejaVu font, letters shaped and stored in right-to-left display order with `arabic-reshaper` and `python-bidi`): exact Arabic quotes pass, wrong ones fail, and short vowel marks are ignored. It is not tested on a real Arabic lecture. If a PDF stores Arabic in another order, the extracted text comes out reversed and Arabic cards will not match.
+Tested on a PDF printed by Microsoft Edge from an Arabic web page (3 slides, small sample). Edge stores Arabic letters in Persian-style forms (`ی` for `ي`, `ھ` for `ه`), and the first version rejected every exact Arabic quote. This version treats those letters as the Arabic ones and ignores short vowel marks. After the fix, on that file: an exact Arabic quote passes, the same quote with full vowel marks passes, and a quote with one word changed fails.
+
+Still broken on that file: a line that mixes Arabic with English or numbers comes out in a different order (`135-145 mmol/L` was extracted as `mmol/L 145-135`), so quotes of such lines fail. Quote the pure Arabic part, or copy the line from `get_slide`. Also tested only on this one producer; PDFs from Word, PowerPoint or scanners may differ. If a PDF stores Arabic in another order, Arabic cards will not match.
 
 ## Roadmap
 
@@ -111,7 +113,7 @@ These are real gaps, not promises:
 
 - **OCR for image slides**, so text in pictures and scanned decks can be checked.
 - **Meaning-aware checking**, so a correct paraphrase can pass and a phrase taken out of context can be caught.
-- **Testing on real Arabic lectures and a real Anki import.**
+- **Testing on more real Arabic lectures (Word, PowerPoint, scans) and a real Anki import.**
 
 ## Develop
 

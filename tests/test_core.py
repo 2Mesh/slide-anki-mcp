@@ -265,3 +265,14 @@ def test_directory_named_like_the_output_file_is_a_clear_error(tmp_path):
     cards = [{"front": "q", "back": "A", "slide": 1, "evidence": "The mitral valve has two cusps"}]
     with pytest.raises(ValueError):
         core.write_anki_tsv(cards, str(tmp_path / "x.tsv"))
+
+
+def test_arabic_from_edge_pdf_persian_letter_forms():
+    # real text taken from a PDF printed by Microsoft Edge: Persian-style yeh/heh, no space before Latin
+    slides = ["ﯾﻔرز اﻟﮭرﻣون اﻟﻣﺿﺎد ﻹدرار اﻟﺑول ﻣن اﻟوطﺎء", "ﯾﻔرز ﻣن اﻟوطﺎء وﯾزﯾد إﻋﺎدة اﻣﺗﺻﺎص اﻟﻣﺎءADH (vasopressin)"]
+    q = "يفرز الهرمون المضاد لإدرار البول من الوطاء"
+    assert core.check_card({"front": "f", "back": q, "evidence": q, "slide": 1}, slides)["ok"]
+    bad = q.replace("الوطاء", "الدماغ")
+    assert not core.check_card({"front": "f", "back": bad, "evidence": bad, "slide": 1}, slides)["ok"]
+    q2 = "يفرز من الوطاء ويزيد إعادة امتصاص الماء"
+    assert core.check_card({"front": "f", "back": q2, "evidence": q2, "slide": 2}, slides)["ok"]
