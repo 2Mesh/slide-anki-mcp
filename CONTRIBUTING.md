@@ -12,7 +12,7 @@ python tests/e2e_stdio.py
 
 `pytest` runs the unit tests in `tests/test_core.py`. The test PDFs are made by the tests with `reportlab`, so you do not need any lecture files. The Arabic test needs a font with Arabic letters (Arial or Tahoma on Windows, DejaVu Sans on Linux). If none is found, it is skipped.
 
-`tests/e2e_stdio.py` starts the server the way Claude does (over stdio) and calls `export_anki` with one good card and one bad card.
+`tests/e2e_stdio.py` starts the server the way Claude does (over stdio) and calls `export_anki` three times: with a good card, with a bad card (nothing may be written), and with a path that already exists (it must be refused).
 
 GitHub Actions runs both on Python 3.10 and 3.12, on Ubuntu and Windows.
 

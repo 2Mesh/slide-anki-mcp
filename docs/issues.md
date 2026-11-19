@@ -8,7 +8,7 @@ Three issue texts, ready to paste into GitHub. Not filed yet.
 
 **Problem**
 
-Many lecture slides are pictures: diagrams, screenshots, scanned pages. `pypdf` only reads real text, so these slides come out empty. On one real 40-slide lecture, 4 slides had no text at all and 7 more had under 40 characters. `list_slides` warns about them, but no card can be checked against them.
+Many lecture slides are pictures: diagrams, screenshots, scanned pages. `pypdf` only reads real text, so these slides come out empty. On one real 40-slide lecture, 4 slides had no text at all and 7 more had under 40 characters. `list_slides` warns about them, and cards that cite a slide with no text are rejected with "slide has no text, cannot verify".
 
 **What would help**
 
@@ -30,7 +30,7 @@ A test PDF with text drawn as an image gives that text through `get_slide`, and 
 
 **Problem**
 
-The check is a whole-word text match. A correct answer in different words is rejected, so the model has to copy the slide's wording exactly. The check also cannot see meaning: if the slide says "Furosemide does not cause hyperkalemia", the back "cause hyperkalemia" passes because those words are on the slide.
+The check needs the model to quote the slide: an `evidence` quote must be on the slide exactly (symbols and numbers kept) and the answer must be inside it. A correct answer in different words is rejected, so the model has to copy the slide's wording. The check also cannot see meaning: if the slide says "Furosemide does not cause hyperkalemia", the back "cause hyperkalemia" with that full sentence as evidence passes, and only a person reading the exported evidence can see the "does not".
 
 **What would help**
 
