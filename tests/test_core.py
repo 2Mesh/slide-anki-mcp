@@ -526,3 +526,13 @@ def test_lower_as_adjective_and_inhibitor_are_not_direction_verbs():
     assert _ok("Lower limb oedema is common in heart failure", "limb oedema")
     assert _ok("Protease inhibitor therapy is used", "therapy is used")
     assert not _ok("Lowers blood pressure in hypertensive patients", "blood pressure in hypertensive patients")
+
+
+def test_nul_in_lecture_pdf_is_read_as_degree_sign(tmp_path, monkeypatch):
+    pdf = tmp_path / "d.pdf"
+    c = canvas.Canvas(str(pdf)); c.drawString(72, 800, "x"); c.showPage(); c.save()
+    monkeypatch.setattr(core, "_page_chunks", lambda page: ["The enzyme is lost at a temperature of 60 \x00C"])
+    slides = core.read_slides(str(pdf))
+    assert "60 °C" in slides[0] and "\x00" not in slides[0]
+    assert core.check_card({"front": "f", "back": "60 °C", "evidence": "lost at a temperature of 60 °C", "slide": 1}, slides)["ok"]
+    assert not core.slide_overview(slides)[0]["warning"] or "damaged" not in core.slide_overview(slides)[0]["warning"]

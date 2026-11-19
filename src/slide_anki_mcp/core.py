@@ -252,7 +252,8 @@ def read_slides(pdf_path: str) -> list[str]:
     chunks = [_page_chunks(page) for page in pages]
     flip = any(_INDIC_RUN.fullmatch(c.strip()) and len(c.strip()) > 1 and c.strip()[0] == "\u0660"
                for page in chunks for c in page)  # a number starting with ٠: written backwards
-    texts = [_join_chunks(c, flip).strip() for c in chunks]
+    # a NUL character in a lecture PDF is the degree sign (a Symbol font glyph): "60 \x00C" is "60 °C"
+    texts = [_join_chunks(c, flip).replace("\x00", "°").strip() for c in chunks]
     texts = [_reorder(t) if _PRESENTATION_FORMS.search(t) else t for t in texts]
     stat = Path(pdf_path).stat()
     for i, page in enumerate(pages):
