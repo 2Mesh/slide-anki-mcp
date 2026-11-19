@@ -93,6 +93,10 @@ Each card carries its slide tag, so you can filter by lecture and slide. The fil
 - **Arabic from Edge or Chrome** is read by the desktop tool. The phone page reads Arabic from Word and PowerPoint.
 - **Full test results** with every number and limit are in [docs/TESTING.md](docs/TESTING.md).
 
+## Feedback so far
+
+Informal, by message, not measured: two classmates tried it on their own lectures and said it worked well. I have no written test results yet. If you try it, please open a "Test report" issue, including when it fails.
+
 ## Develop
 
 ```bash
