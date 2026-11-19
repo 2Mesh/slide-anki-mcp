@@ -118,7 +118,9 @@ Known trade-offs and gaps:
 - Ignoring spaces and punctuation means a merged or split Arabic word, or a missing `« » . : ؟`, still passes.
 - Word drops `-` and `/` between numbers. On a slide with neither between numbers, `١٢٠/٨٠`, `١٢٠-٨٠` and `١٢٠ ٨٠` count as the same.
 - Reversed Arabic-Indic numbers in Word are detected from one signal (a backwards number starting with ٠ somewhere in the file). Without it, those numbers are not flipped.
-- Not tested: Google Docs or Slides export, LibreOffice, macOS, scanned PDFs.
+- A scanned PDF (pages that are only pictures) is rejected on every card with "slide has no text, cannot verify"; tested on a real lecture rendered to images. It is not read.
+- Fails: an Arabic PDF made with PyMuPDF (MuPDF) HTML. Its text layer holds letters in reversed visual order and some wrong characters, so exact quotes fail. Only text copied from `get_slide` would match.
+- Not tested: Google Docs or Slides export, LibreOffice, macOS (Preview, Pages, Keynote).
 
 ## Roadmap
 
