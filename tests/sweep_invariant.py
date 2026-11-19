@@ -1,7 +1,7 @@
 """Run: python tests/sweep_invariant.py FOLDER_WITH_PDFS. For every slide line of 4+ words, try
 several backs (word spans). Every card the tool calls 'verified' must rebuild the slide's own line
 when the blank is filled, and the tool must never raise. Prints counts only."""
-import random, sys
+import random, re, sys
 from pathlib import Path
 from slide_anki_mcp import core
 
@@ -23,7 +23,7 @@ for pdf in sorted(Path(sys.argv[1]).glob("*.pdf")):
                 if r.get("status") == "verified":
                     verified += 1
                     filled = r["front"].replace("___", back)
-                    if line not in filled or r["front"].count("___") < 1:
+                    if re.sub("[-]", "•", line) not in filled or r["front"].count("___") < 1:  # private-use bullets are shown as dots
                         bad.append((pdf.name[:3], n, back))
 print(f"tried {tried}, verified {verified}, violations {len(bad)}")
 sys.exit(1 if bad else 0)

@@ -377,12 +377,14 @@ def _grade(result: dict, card: dict, cloze: bool, slide: str) -> None:
     if "___" in context:
         _fail(result, "the slide itself contains ___, so the blank would be ambiguous")
         return
+    title = " ".join(next((ln for ln in slide.splitlines() if ln.strip()), "").split())
+    has_title = len(re.findall(r"[^\W\d_]+", title)) >= 2 and title not in context  # a page number or "Cont.," is no topic
     if back.lower() in _STOP or len(re.findall(r"\w+", front.replace("___", " "))) < 2:
-        title = " ".join(next((ln for ln in slide.splitlines() if ln.strip()), "").split())
-        if len(re.findall(r"[^\W\d_]+", title)) < 2 or title in context or back.lower() in _STOP:  # a page number is no topic
+        if not has_title or back.lower() in _STOP:
             _fail(result, "cloze back is too small or is the whole quote: the blank would have no context")
             return
-        front = f"{title} — {front}"  # the slide's own title gives the blank a topic
+    if has_title:  # the slide's own title tells the student what the sentence is about
+        front = f"{title} — {front}"
         context = f"{title} — {context}"
     if front.replace("___", back) != context:  # the promise: filling the blank gives back the slide's own words
         _fail(result, "internal check failed: the cloze front does not rebuild the slide line")
