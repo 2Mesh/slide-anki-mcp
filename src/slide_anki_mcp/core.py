@@ -54,8 +54,9 @@ def _text(s: str, join_hyphen: bool = True, split_joined: bool = False) -> str:
 
 
 _NEGATION = re.compile(r"(?:(?:^|[\s(\[])(?:not|no|never|without|non|cannot|neither|nor"
-                       r"|لا|ليس|ليست|لم|لن|غير|بدون|دون)|n't|[↑↓])\s+$")
-_MORE = re.compile(r"\s*,\s*(?!etc\b|e\.g\b|i\.e\b)\S")
+                       r"|لا|ليس|ليست|لم|لن|غير|بدون|دون)|n't|[↑↓])\s+$"
+                       r"|(?:^|[\s(\[])(?:(?:increas|decreas|reduc|rais|elevat)(?:e|es|ed|ing)|inhibit(?:s|ed|ing)?|suppress(?:es|ed|ing)?|lower(?:s|ed|ing))\s+(?:the\s+|a\s+|an\s+)?$")
+_MORE = re.compile(r"\s*(?:,\s*(?!etc\b|e\.g\b|i\.e\b)|\s(?:&|and|or)\s+)\S")
 
 
 def _matches(haystack: str, needle: str) -> list:

@@ -509,3 +509,20 @@ def test_page_without_text_is_read_by_ocr_and_marked(tmp_path, monkeypatch):
     assert res["ok"] and res["ocr"]
     assert not core.check_card({"front": "f", "back": "a disaccharide", "slide": 1,
                                 "evidence": "Galactose is a disaccharide (simple sugar)."}, slides)["ok"]
+
+
+def test_list_cut_before_and_or_ampersand_and_direction_verbs():
+    ev = "Aldosterone is stimulated by angiotensin II, low sodium & high potassium."
+    assert not _ok(ev, "angiotensin II, low sodium")
+    assert _ok(ev, "angiotensin II, low sodium & high potassium")
+    assert not _ok("Signs: fever, rash and cough", "fever, rash")
+    assert not _ok("ADH decreases the release of renin in the kidney", "release of renin in the kidney")
+    assert _ok("ADH decreases the release of renin in the kidney", "decreases the release of renin in the kidney")
+    assert not _ok("Aldosterone increases sodium reabsorption", "sodium reabsorption")
+    assert _ok("Aldosterone increases sodium reabsorption", "increases sodium reabsorption")
+
+
+def test_lower_as_adjective_and_inhibitor_are_not_direction_verbs():
+    assert _ok("Lower limb oedema is common in heart failure", "limb oedema")
+    assert _ok("Protease inhibitor therapy is used", "therapy is used")
+    assert not _ok("Lowers blood pressure in hypertensive patients", "blood pressure in hypertensive patients")
