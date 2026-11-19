@@ -1,13 +1,28 @@
 # slide-anki-mcp
 
 [![tests](https://github.com/2Mesh/slide-anki-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/2Mesh/slide-anki-mcp/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/slide-anki-mcp)](https://pypi.org/project/slide-anki-mcp/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-An MCP server for students who study from lecture slides. It makes Claude (or any MCP client) quote the slide for every Anki card, and it rejects a card when the quote is not really on that slide.
+**Turn your lecture slides into Anki cards that always match the slide.**
 
-Study tools often write cards from the model's own knowledge. If your exam is graded against your lecturer's slides, that is a risk. Here every card carries a quote from the slide, the server checks the quote letter by letter, and the quote is written into the card so you can read it next to the answer.
+An MCP server for students. Claude reads your lecture PDF, and every card it makes comes with a quote from the slide. The server checks that quote letter by letter, builds the question from the slide's own sentence, and writes an Anki file where each answer shows its source.
 
-**What it proves:** the quote is on the slide, and the answer is inside the quote.
-**What it does not prove:** that the card is correct. You still need to read your cards.
+```
+Slide 7:  "ADH is produced in the hypothalamus"
+Card:     ADH is produced in ___            ->  the hypothalamus
+Source:   slide 7, quoted next to the answer
+```
+
+## Why you will like it
+
+- **Cards that follow your lecturer.** Exams are graded against the slides, so the cards come from the slides.
+- **Fill-in-the-blank cards built for you.** The question is the slide's own sentence with the answer hidden. Fill the blank and you get the slide line back, letter for letter. This was checked on 335,175 generated cards over 271 PDFs.
+- **Every answer shows its source.** The slide number and the quote are written into the card.
+- **English and Arabic.** Works with Arabic slides saved from Word, PowerPoint, Edge and Chrome, including numbers, units and mixed Arabic and English lines.
+- **Scanned slides.** Optional OCR on Windows reads pages that are only pictures.
+- **Phone page.** A small page in `docs/app` lets you pick a PDF in your phone browser, select the answer, and download a file for Anki. The PDF never leaves your phone.
+- **Private.** Everything runs on your computer. No account and no API key.
 
 ## Quick start
 
@@ -16,64 +31,13 @@ pip install slide-anki-mcp
 claude mcp add slide-anki -- slide-anki-mcp
 ```
 
-Then ask Claude: "Read C:\lectures\renal.pdf with slide-anki. Make cards from slides 3 to 10, quote each slide in the evidence field, and export to C:\lectures\renal.tsv." Give the full path to the PDF. It reads PDF only: for a PowerPoint deck, use File → Save As → PDF first (tried once with PowerPoint on a 31-slide deck, all slides had text). Import the `.tsv` in Anki with File → Import.
+Then ask Claude:
 
-Needs Python 3.10 or newer. Also on PyPI: https://pypi.org/project/slide-anki-mcp/
+> Read C:\lectures\renal.pdf with slide-anki. Make cloze cards from slides 3 to 10 and export them to C:\lectures\renal.tsv.
 
-## Tools
+Open Anki and choose **File → Import**. Needs Python 3.10 or newer. For a PowerPoint deck, use **File → Save As → PDF** first.
 
-| Tool | What it does |
-|---|---|
-| `list_slides(pdf_path)` | Slide numbers with first line and length. Warns about slides with little or no text |
-| `get_slide(pdf_path, slide)` | Exact text of one slide, to copy quotes from |
-| `check_cards(pdf_path, cards)` | Checks each card. A card whose quote fails comes back with the slide text so the quote can be fixed |
-| `export_anki(pdf_path, cards, out_path)` | Writes a new `.tsv` only if every card passes, and by default only cloze cards (`"cloze": true`, front built from the quote). Each card is tagged `Slide_N`. Duplicates (same front and back, ignoring case and extra spaces) are written once |
-
-A card is:
-
-```json
-{"front": "Where is ADH produced?", "back": "the hypothalamus",
- "evidence": "ADH is produced in the hypothalamus", "slide": 1}
-```
-
-A card passes only if all of these are true:
-
-1. The slide has text. A slide with none is rejected with "slide has no text, cannot verify".
-2. `evidence` is at least 4 words and is on the cited slide exactly as quoted. Case, extra spaces, a word split by a hyphen at a line break, and dash or quote style are ignored. Everything else must match, including `<`, `>`, `+`, `-` and numbers. Superscripts are kept: `10⁵` is not `105`.
-3. `back` is inside `evidence`, and is not cut from a longer token: `1500 ml` is not found in `1000-1500 ml`, and `70 mV` is not found in `-70 mV`.
-
-`export_anki` also refuses an `out_path` that does not end with `.tsv`, that already exists, or whose folder does not exist. It never overwrites a file.
-
-## Example
-
-Made with a small two-slide test PDF. Slide 1 says "ADH is produced in the hypothalamus", slide 2 says "Normal plasma sodium is 135-145 mmol/L". `check_cards` with one wrong card and one right card:
-
-```json
-[
-  {"slide": 1, "ok": false, "unsupported": ["evidence is not on this slide exactly as quoted"]},
-  {"slide": 2, "ok": true, "unsupported": []}
-]
-```
-
-(The failing card also comes back with `slide_text`, left out here.) After fixing the first card and sending the sodium card twice by mistake, `export_anki` returns:
-
-```json
-{"written": "/path/to/cards.tsv", "count": 2, "duplicates_skipped": [2]}
-```
-
-and the file contains:
-
-```
-#separator:tab
-#html:false
-#tags column:3
-"Where is ADH produced?"	"the hypothalamus  |  Source (slide 1): ADH is produced in the hypothalamus"	"slides Slide_1"
-"Normal plasma sodium?"	"135-145 mmol/L  |  Source (slide 2): Normal plasma sodium is 135-145 mmol/L"	"slides Slide_2"
-```
-
-The header lines are read by Anki 2.1.54 and newer. Older versions need the field separator set to Tab by hand. Every field is quoted so a front that starts with `#` is not read as a header line. Tested with the import code of the official `anki` Python library (version 26.09.4), not the Anki desktop app: 3 of 3 test notes imported, the `#` front, the Arabic text and the tags came through. The file doubles quotes inside a field (standard CSV); Anki stored them as `&quot;`, which should show as plain quotes. I have not opened the result in the Anki app.
-
-## Install for Claude Desktop
+### Claude Desktop
 
 Open `claude_desktop_config.json` (Windows: `%APPDATA%\Claude\claude_desktop_config.json`, macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`), add the server, then restart Claude Desktop:
 
@@ -87,71 +51,47 @@ Open `claude_desktop_config.json` (Windows: `%APPDATA%\Claude\claude_desktop_con
 }
 ```
 
-If Claude cannot find the command, put its full path in `"command"`. Get the path with `where slide-anki-mcp` on Windows or `which slide-anki-mcp` on macOS and Linux. If you installed inside a virtual environment, you need that full path for Claude Code as well.
+If Claude cannot find the command, put its full path in `"command"` (`where slide-anki-mcp` on Windows, `which slide-anki-mcp` on macOS and Linux).
 
-## What it cannot catch
+## The tools
 
-- **Meaning.** It checks that words are on the slide, not what they mean. If the slide says "Mitral valve does not have three cusps", a card with the back "three cusps" and that full sentence as evidence passes. The "does not" is in the exported card, so you can see it, but the server does not detect it.
-- **Shortened answers.** A back that stops in the middle of a list is rejected when the quote goes on with more items after a comma, `&`, `and` or `or` (`GALT, GALK` from `GALT, GALK, GALE`). Other shortenings pass, and so does a true line from the slide under a question it does not answer, such as one enzyme from a list under "which enzyme is the classic one?".
-- **Negation and direction.** If `not`, `no`, `without`, `↑`, `↓` or a direction verb (`increases`, `decreases`, `inhibits`, `suppresses`, `reduces`, `lowers`, `raises`, `elevates`) stands right before the back inside the quote, the card is rejected unless the back includes it. Other wording that flips the meaning is not caught.
-- **The front.** The question is never checked. A true sentence under the wrong question passes.
-- **Units that differ only in case.** Case is ignored, so `mM` and `mm`, or `Mg` and `mg`, count as the same.
-- **Quotes that start right after a dash or sign.** If a slide line reads `Beverages -1000-1500 ml`, the quote has to include the dash. A quote that cuts a number, unit or range in the middle (`135` from `135-145 mmol/L`, `500 ml` from `1,500 ml`, `80 mmHg` from `120/80 mmHg`) is rejected.
-- **Paraphrases.** A correct answer in other words is rejected. Copy the slide's wording. Small differences such as "200mL" on the slide and "200 mL" in the card are also rejected.
-- **Images.** Text inside pictures and diagrams is not read. Scanned pages with no text can be read by OCR on Windows only: `pip install slide-anki-mcp[ocr]` (uses the OCR built into Windows 10/11; Arabic needs the Arabic OCR language). Such slides are marked in `list_slides`, and their cards come back with `"ocr": true`. On two scanned test files and one scanned real Arabic Word document, 46 of 49 correct cards passed and 0 of 46 wrong ones; the misses were a misread `50%` and table rows. OCR runs only on pages with no text layer, so a picture on a slide that has some text is still not read. Without the extra, or on macOS and Linux, scanned slides are rejected. On one real 40-slide lecture, 4 slides had no text at all and 7 more had under 40 characters, mostly section titles.
-- **Glued words.** When a PDF glues two text boxes (`GlycerolConsequence`), a quote that starts at the second box is still accepted. Glue between two lowercase letters or capitals only is not split.
-- **Unreadable characters.** A character the PDF cannot map (`�`) matches a minus sign only, because that is what it was on the lecture I tested. `list_slides` warns about such slides. A slide that really has another symbol there could let a quote with `-` pass.
-- **Bad text extraction.** If the PDF stores text in an odd way, the extracted words can be split or out of order, and correct cards will fail.
-
-On a second real lecture (a 31-slide PowerPoint saved as PDF), I wrote 40 correct and 40 wrong cards by hand: 39 of 40 correct cards were accepted (the one rejected is a list I had shortened by mistake, which the list rule rightly refuses), and 4 of 40 wrong cards were accepted, all of them true lines under the wrong question or a shortened quote. Small sample, written by me, so treat it as a rough guide.
-
-**Cloze cards (v0.2.3, extended in v0.3.0).** A quote check cannot tell that a question asks about something other than the quoted line. On four real lectures (60 correct and 60 wrong cards I wrote by hand) 23 of the 60 wrong cards passed for that reason. So a card can now say `"cloze": true` and give no front: the tool builds the front from the quote, with the back hidden as `___`. A cloze card gets `status: "verified"`; a card with its own front gets `status: "needs_review"`, because nothing checks that its question matches the quote. `export_anki` writes only cloze cards by default; a card with its own question is refused and listed in `needs_review_indexes`, with a `suggested_cloze_front` when one can be built. Pass its index in `reviewed_indexes` after you read the question next to its quote: it is then written with the Anki tag `reviewed`. Measured through `export_anki` on the 120 cards: as free-form questions 0 correct and 0 wrong were written; as cloze cards 54 of 60 correct were written (6 refused: the blank would have no context, or the quote is not letter for letter on the slide) and 20 of the 60 wrong ones, which became true sentences of the slide. On three more lectures I had not tuned on (30 correct and 30 wrong cards written by an assistant): 29 of 30 correct cloze cards written, 27 of 30 wrong ones turned into true sentences, none with a false fact, and 0 free-form cards written. A cloze card keeps the whole slide line (and a heading line ending in `:` or `?`), blanks whole words only, uses the slide's own letters, and OCR text is never `verified`. This does not make free-form questions safe, and it was tuned on these same lectures, so a new lecture may behave differently.
-
-On four more real lectures (glycolysis, gluconeogenesis, clinical enzymology, karyotyping), a reviewer wrote 15 correct and about 15 wrong cards per lecture: all 60 correct cards were accepted, and 23 of 59 wrong cards were accepted. Every accepted wrong card quotes a real line of the slide and the answer sits inside it, but the question asks about something else (step 7 asked, the line is step 8; "male" asked, the line gives both sexes and the back is `46,XX`). Those wrong cards were written to test exactly this weakness, so the share is higher than in real use, but it shows the limit plainly: the tool checks the quote, not whether the card means what the slide means. Read your cards. Two outside testers on other lectures saw the same kind of misses.
-
-For the numbers: an earlier version of this tool matched the answer against the slide with symbols removed. On a real 40-slide lecture it accepted 8 of 30 cards that were made wrong on purpose, for example a changed number or a dropped "No". This version keeps symbols and requires a quote. On a new set of 30 correct and 29 wrong cards from the same lecture (written by a reviewer, so a small and friendly sample), it accepted 26 of the 30 correct cards and 0 of the 29 wrong ones. The 4 rejected correct cards were quotes shorter than 4 words, a quote with `and` where the slide has `&`, and a quote that left out a leading dash. The wrong cards did not include a dropped "not", because that lecture has no usable place for one, so that case is untested on real slides.
-
-### Arabic
-
-Tested on 5 Arabic PDFs from 4 producers: PowerPoint, Word (a generated file and a real document), Edge and Chrome. Each producer breaks Arabic text differently, and the tool puts it back: Word glues words without spaces and flips Arabic-Indic numbers, Edge and Chrome store letters in presentation forms in visual order, PowerPoint loses spaces next to numbers and units. For quotes that contain Arabic, spaces and punctuation are ignored, but every letter, digit and sign (`% + - / < > = ± ≤ ≥ °`) must match in order, and negation words (`لا ليس لم لن غير بدون`) must be in the back like `not` in English.
-
-On those files, 86 of 86 correct Arabic cards were accepted and 0 of 81 wrong cards (changed number, unit or word, swapped numbers, dropped `لا`, reversed digits, a cut range). The cards were written by a reviewer from the source text, so this is a small, friendly sample.
-
-Known trade-offs and gaps:
-
-- Ignoring spaces and punctuation means a merged or split Arabic word, or a missing `« » . : ؟`, still passes.
-- Word drops `-` and `/` between numbers. On a slide with neither between numbers, `١٢٠/٨٠`, `١٢٠-٨٠` and `١٢٠ ٨٠` count as the same.
-- Reversed Arabic-Indic numbers in Word are detected from one signal (a backwards number starting with ٠ somewhere in the file). Without it, those numbers are not flipped.
-- A scanned PDF (pages that are only pictures) is rejected on every card with "slide has no text, cannot verify"; tested on a real lecture rendered to images. It is not read.
-- Fails: an Arabic PDF made with PyMuPDF (MuPDF) HTML. Its text layer holds letters in reversed visual order and some wrong characters, so exact quotes fail. `list_slides` now warns when a text layer looks damaged like this; only text copied from `get_slide` would match.
-- Not tested: Google Docs or Slides export, LibreOffice, macOS (Preview, Pages, Keynote).
-
-## Arabic check (second round)
-
-I ran the cloze rule over 41 real Arabic PDFs: 65,130 random cloze cards, 62,535 verified, 0 broke the rule that the filled blank rebuilds the slide line, 0 errors. A separate test with 24 correct and 24 wrong Arabic cards written on three Arabic PDFs: 24 of 24 correct cloze cards verified; the 24 wrong cards became cloze cards too, 23 of them true sentences of the slide (the 24th had a page number as its only context, which the tool now refuses). Honest limits: only 3 of 9 candidate PDFs had readable text for that test; some Arabic PDFs have a damaged text layer (wrong letters). The tool now warns when an Arabic PDF has very few common words (5 of the 41 PDFs got the warning, 2 of which I know are damaged), but it misses some damage: one PDF with wrong letters raised no warning. Read `get_slide` before trusting an Arabic card from such a file. Spurious spaces inside Arabic words (an extractor artefact) are copied as they are.
-
-## Phone page (beta, not published yet)
-
-`docs/app/index.html` is one static page that runs in a phone browser: pick a PDF (it never leaves the device), select the answer inside a slide line, tap "Make card", download a `.tsv` for Anki. The question is the slide line with the selection hidden, built by the same rules as the tool (whole words, at least two words of context). Tested so far, in a desktop browser at phone width (375 px, no sideways scroll, 44 px buttons): it loads English PDFs and Arabic PDFs saved from Word and PowerPoint, builds cloze cards that rebuild the line (Arabic words and a mixed Arabic/number line), refuses a lone stopword, and its `.tsv` imports into the official `anki` library with the right fields and tags. Arabic PDFs printed from Edge or Chrome store the letters as loose glyphs in visual order, which this page cannot read correctly, so it shows a message and no lines for them; use the desktop tool for those. Not tested: a real phone, AnkiDroid/AnkiMobile themselves, scanned PDFs. It needs the internet only to load pdf.js from a CDN.
-
-## What is guaranteed and what is not
-
-| | |
+| Tool | What it does |
 |---|---|
-| **Guaranteed** | A card marked `verified` is a cloze card: filling its blank with the back gives back the slide's own line, letter for letter (checked on 335,175 random cloze cards over 271 PDFs: 271,389 verified, 0 violations of that rule). Cards with OCR text are never `verified`. |
-| **Not guaranteed** | That a blank makes a good question (some blanks have little context). That a free-form question matches its quote: those need your review and are tagged `reviewed`. That the PDF text was extracted correctly (damaged Arabic PDFs give a warning). |
-| **Measured, not promised** | 56 of 60 correct cloze cards accepted on the four tuning lectures; 29 of 30 on three lectures not used for tuning. The rest are refused with a `suggested_quote` taken from the slide. |
-| **Not tested** | Google Docs, LibreOffice and macOS exports; the Anki desktop app (the official `anki` library was used). |
+| `list_slides(pdf_path)` | Lists the slides with their first line and size |
+| `get_slide(pdf_path, slide)` | Gives the exact text of one slide |
+| `check_cards(pdf_path, cards)` | Checks each card and says what to fix. For a cloze card it returns the finished question |
+| `export_anki(pdf_path, cards, out_path)` | Writes a new `.tsv` for Anki, tagged by slide. Cloze cards are written directly |
 
-This is not a claim that the tool makes no mistakes.
+A cloze card needs only the answer, the slide number and the quote:
 
-## Roadmap
+```json
+{"cloze": true, "back": "the hypothalamus",
+ "evidence": "ADH is produced in the hypothalamus", "slide": 7}
+```
 
-These are real gaps, not promises:
+The tool answers with the question already built:
 
-- **OCR on macOS and Linux.** It works on Windows only for now.
-- **Meaning-aware checking**, so a correct paraphrase can pass and a phrase taken out of context can be caught.
-- **Testing on more real Arabic lectures (Word, PowerPoint, scans) and a real Anki import.**
+```json
+{"ok": true, "status": "verified", "front": "ADH is produced in ___"}
+```
+
+You can also write your own question. Read it next to its quote, then list the card's number in `reviewed_indexes`. It is exported with the Anki tag `reviewed`.
+
+## What you get in Anki
+
+```
+"ADH is produced in ___"    "the hypothalamus  |  Source (slide 7): ADH is produced in the hypothalamus"    "slides Slide_7"
+```
+
+Each card carries its slide tag, so you can filter by lecture and slide. The file imports into Anki 2.1.54 and newer. Import was tested with the official `anki` Python library.
+
+## Good to know
+
+- **Cloze cards verify the text.** The checker confirms that the slide line is rebuilt exactly. Choose an answer that leaves enough of the sentence to make a clear question; the tool tells you when a blank has too little context and suggests the exact slide line.
+- **Your own questions are welcome.** The tool shows you the question beside its quote so you confirm it in one step.
+- **Best with text PDFs.** Slides saved as PDF from Word, PowerPoint, Edge or Chrome work well. Scanned pages work on Windows with `pip install "slide-anki-mcp[ocr]"` (Arabic needs the Arabic OCR language from Windows).
+- **Arabic from Edge or Chrome** is read by the desktop tool. The phone page reads Arabic from Word and PowerPoint.
+- **Full test results** with every number and limit are in [docs/TESTING.md](docs/TESTING.md).
 
 ## Develop
 
@@ -161,6 +101,4 @@ pytest
 python tests/e2e_stdio.py
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-MIT licensed.
+See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed.
