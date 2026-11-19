@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" dir="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slide to Anki</title>
+<style>
+:root{--bg:#fff;--fg:#111;--mut:#555;--line:#ddd;--acc:#0b5fff;--card:#f6f7f9}
+@media (prefers-color-scheme:dark){:root{--bg:#121212;--fg:#eee;--mut:#aaa;--line:#333;--acc:#6ea0ff;--card:#1c1c1e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:1.2rem;margin:0 0 4px}
+p.note{color:var(--mut);margin:4px 0 12px;font-size:.9rem}
+button,input[type=file]{min-height:44px;font:inherit}
+button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:0 16px}
+button.sec{background:var(--card);color:var(--fg);border:1px solid var(--line)}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.line{padding:10px 12px;margin:6px 0;border:1px solid var(--line);border-radius:8px;background:var(--card);user-select:text;-webkit-user-select:text}
+.card{border-inline-start:4px solid var(--acc);padding:8px 12px;margin:6px 0;background:var(--card);border-radius:6px}
+#msg{color:var(--mut);min-height:1.5em}
+</style>
+</head>
+<body>
+<main>
+<h1>Slide to Anki</h1>
+<p class="note">Your PDF stays on this device. Pick a PDF, open a slide, select the answer inside a line, tap "Make card". The question is the slide's own line with the answer hidden, so it cannot disagree with the slide. Beta: Arabic PDFs are not yet verified on this page.</p>
+<input id="file" type="file" accept="application/pdf">
+<div class="bar"><button class="sec" id="prev">&#8249;</button><span id="pos">-</span><button class="sec" id="next">&#8250;</button>
+<button id="make">Make card</button></div>
+<div id="msg" role="status"></div>
+<div id="lines"></div>
+<h2 style="font-size:1rem">Cards (<span id="n">0</span>)</h2>
+<div id="cards"></div>
+<div class="bar"><button id="export">Download .tsv for Anki</button></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const $ = id => document.getElementById(id);
+let pdf = null, page = 1, lines = [], cards = [], title = "";
+
+// Same rules as the Python tool: whole words only, at least 2 words of context left, never a stopword alone.
+const STOP = new Set("the a an of in on at to is are and or by for with it as".split(" "));
+function buildCloze(line, back) {
+  back = back.split(/\s+/).filter(Boolean).join(" ");
+  if (!back) return [null, "Select the answer inside one line first."];
+  const esc = back.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp((/^[\p{L}\p{N}]/u.test(back) ? "(?<![\\p{L}\\p{N}_])" : "") + esc + (/[\p{L}\p{N}]$/u.test(back) ? "(?![\\p{L}\\p{N}_])" : ""), "gu");
+  if (line.includes("___")) return [null, "This line already contains ___."];
+  let hits = 0;
+  const front = line.replace(re, () => (hits++, "___"));
+  if (!hits) return [null, "Select whole words that are inside one line."];
+  const left = (front.replace(/___/g, " ").match(/[\p{L}\p{N}]+/gu) || []).length;
+  if (STOP.has(back.toLowerCase()) || left < 2) return [null, "Too little context left: select a shorter part of the line."];
+  if (front.split("___").join(back) !== line) return [null, "Internal check failed."];
+  return [front, null];
+}
+
+async function show(n) {
+  const p = await pdf.getPage(n), tc = await p.getTextContent();
+  const rows = []; let y = null, cur = [];
+  for (const it of tc.items) {
+    const ny = Math.round(it.transform[5]);
+    if (y !== null && Math.abs(ny - y) > 3) { rows.push(cur.join(" ")); cur = []; }
+    y = ny; cur.push(it.str);
+  }
+  if (cur.length) rows.push(cur.join(" "));
+  lines = rows.map(r => r.split(/\s+/).filter(Boolean).join(" ")).filter(Boolean);
+  title = lines[0] || "";
+  $("pos").textContent = n + " / " + pdf.numPages;
+  $("lines").replaceChildren(...lines.map(t => { const d = document.createElement("div"); d.className = "line"; d.textContent = t; d.dir = "auto"; return d; }));
+  $("msg").textContent = lines.length ? "" : "This slide has no text (maybe an image).";
+}
+function render() {
+  $("n").textContent = cards.length;
+  $("cards").replaceChildren(...cards.map(c => { const d = document.createElement("div"); d.className = "card"; d.dir = "auto";
+    d.textContent = c.front + "  →  " + c.back + "  (slide " + c.slide + ")"; return d; }));
+}
+$("file").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  pdf = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise; page = 1; await show(1);
+};
+$("prev").onclick = () => { if (pdf && page > 1) show(--page); };
+$("next").onclick = () => { if (pdf && page < pdf.numPages) show(++page); };
+$("make").onclick = () => {
+  const sel = getSelection(), back = sel ? sel.toString() : "";
+  const node = sel && sel.anchorNode && (sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode);
+  const el = node && node.closest ? node.closest(".line") : null;
+  if (!el) { $("msg").textContent = "Select the answer inside one line first."; return; }
+  const [front, err] = buildCloze(el.textContent, back);
+  if (err) { $("msg").textContent = err; return; }
+  cards.push({ front, back: back.split(/\s+/).filter(Boolean).join(" "), slide: page, line: el.textContent }); render();
+  $("msg").textContent = "Card added."; sel.removeAllRanges();
+};
+$("export").onclick = () => {
+  if (!cards.length) { $("msg").textContent = "No cards yet."; return; }
+  const q = s => '"' + s.replace(/"/g, '""') + '"';
+  const rows = cards.map(c => [c.front, c.back + "  |  Source (slide " + c.slide + "): " + c.line, "slides Slide_" + c.slide].map(q).join("\t"));
+  const blob = new Blob(["#separator:tab\n#html:false\n#tags column:3\n" + rows.join("\n") + "\n"], { type: "text/tab-separated-values" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "slide_cards.tsv"; a.click();
+};
+</script>
+</body>
+</html>

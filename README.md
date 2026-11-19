@@ -126,6 +126,10 @@ Known trade-offs and gaps:
 - Fails: an Arabic PDF made with PyMuPDF (MuPDF) HTML. Its text layer holds letters in reversed visual order and some wrong characters, so exact quotes fail. `list_slides` now warns when a text layer looks damaged like this; only text copied from `get_slide` would match.
 - Not tested: Google Docs or Slides export, LibreOffice, macOS (Preview, Pages, Keynote).
 
+## Phone page (beta, not published yet)
+
+`docs/app/index.html` is one static page that runs in a phone browser: pick a PDF (it never leaves the device), select the answer inside a slide line, tap "Make card", download a `.tsv` for Anki. The question is the slide line with the selection hidden, built by the same rules as the tool (whole words, at least two words of context). Tested so far: it loads a PDF in a browser, builds a cloze card that rebuilds the line, refuses a lone stopword, has no sideways scroll at 375 px width, and buttons are 44 px high. Not tested: real phones, Arabic PDFs through this page (the Arabic sweep above used the Python tool), importing its `.tsv` into AnkiDroid/AnkiMobile. It needs the internet only to load pdf.js from a CDN.
+
 ## What is guaranteed and what is not
 
 | | |
