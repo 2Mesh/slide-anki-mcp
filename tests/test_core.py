@@ -536,3 +536,20 @@ def test_nul_in_lecture_pdf_is_read_as_degree_sign(tmp_path, monkeypatch):
     assert "60 °C" in slides[0] and "\x00" not in slides[0]
     assert core.check_card({"front": "f", "back": "60 °C", "evidence": "lost at a temperature of 60 °C", "slide": 1}, slides)["ok"]
     assert not core.slide_overview(slides)[0]["warning"] or "damaged" not in core.slide_overview(slides)[0]["warning"]
+
+
+def test_cloze_front_is_built_from_the_quote():
+    slides = ["Examples: trisomy 21 (Down syndrome), monosomy X (Turner syndrome), and Klinefelter syndrome"]
+    ev = slides[0]
+    r = core.check_card({"cloze": True, "back": "Turner syndrome", "slide": 1, "evidence": ev}, slides)
+    assert r["ok"] and r["status"] == "verified"
+    assert r["front"] == "Examples: trisomy 21 (Down syndrome), monosomy X (___), and Klinefelter syndrome"
+
+
+def test_free_form_front_needs_review_and_bad_cloze_fails():
+    slides = ["Examples: trisomy 21 (Down syndrome), monosomy X (Turner syndrome), and Klinefelter syndrome"]
+    ev = slides[0]
+    r = core.check_card({"front": "Trisomy 21 causes which syndrome?", "back": "Turner syndrome", "slide": 1, "evidence": ev}, slides)
+    assert r["ok"] and r["status"] == "needs_review"
+    r = core.check_card({"cloze": True, "back": "Edwards syndrome", "slide": 1, "evidence": ev}, slides)
+    assert not r["ok"]

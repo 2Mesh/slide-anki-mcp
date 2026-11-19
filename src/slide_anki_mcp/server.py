@@ -33,8 +33,11 @@ def check_cards(pdf_path: str, cards: list[dict]) -> list[dict]:
 
     'evidence' must be a quote of at least 4 words copied exactly from the cited
     slide, and 'back' must be inside that quote. Symbols, signs and numbers must
-    match exactly. A passing card means the quote is on the slide. It does not
-    mean the card is correct: read the evidence next to the answer. A failing
+    match exactly. A passing card means the quote is on the slide. Set "cloze": true
+    (front not needed) and the tool builds the front from the quote with the back
+    hidden as ___: status "verified", the question cannot disagree with the slide.
+    A card with its own front gets status "needs_review": nothing checks that the
+    question matches the quote, so read the evidence next to the answer. A failing
     card comes back with the slide text so the quote can be fixed.
     """
     slides = core.read_slides(pdf_path)
@@ -59,6 +62,8 @@ def export_anki(pdf_path: str, cards: list[dict], out_path: str) -> dict:
     bad = [i for i, c in enumerate(checks) if not c["ok"]]
     if bad:
         return {"written": None, "rejected_card_indexes": bad, "details": [checks[i] for i in bad]}
+    cards = [{**c, "front": k["front"]} if k.get("status") == "verified" else c for c, k in zip(cards, checks)]
+    review = [i for i, k in enumerate(checks) if k.get("status") != "verified"]
     seen, unique, dupes = set(), [], []
     for i, c in enumerate(cards):
         key = core.card_key(c)
@@ -68,7 +73,7 @@ def export_anki(pdf_path: str, cards: list[dict], out_path: str) -> dict:
             seen.add(key)
             unique.append(c)
     return {"written": core.write_anki_tsv(unique, out_path), "count": len(unique),
-            "duplicates_skipped": dupes}
+            "duplicates_skipped": dupes, "needs_review_indexes": review}
 
 
 def main() -> None:

@@ -304,6 +304,21 @@ def _fail(result: dict, *problems: str) -> dict:
     return result
 
 
+def _grade(result: dict, card: dict, cloze: bool) -> None:
+    """Set ``status``. A cloze card gets its front from the quote itself (the back
+    replaced by ___), so its question cannot disagree with the slide: 'verified'.
+    A free-form front is never compared with the quote: 'needs_review'."""
+    if not cloze:
+        result["status"] = "needs_review"
+        return
+    quote = " ".join(card["evidence"].split())
+    front, hits = re.subn(re.escape(" ".join(card["back"].split())), "___", quote, flags=re.I)
+    if not hits:
+        _fail(result, "cannot build a cloze card: the back is not written the same way in the evidence")
+        return
+    result["status"], result["front"] = "verified", front
+
+
 def check_card(card: dict, slides: list[str]) -> dict:
     """Check one card {front, back, slide, evidence}. Never raises on bad input.
 
@@ -323,7 +338,10 @@ def check_card(card: dict, slides: list[str]) -> dict:
         return _fail(result, f"slide number out of range: this PDF has slides 1 to {len(slides)}")
     slide = slides[page - 1]
     front, back, evidence = card.get("front"), card.get("back"), card.get("evidence")
+    cloze = card.get("cloze") is True
     for name, value in (("front", front), ("back", back), ("evidence", evidence)):
+        if name == "front" and cloze:
+            continue  # the tool builds the front from the quote
         if not isinstance(value, str) or not _text(value):
             _fail(result, f"{name} must be non-empty text")
     if result["unsupported"]:
@@ -346,6 +364,8 @@ def check_card(card: dict, slides: list[str]) -> dict:
         _fail(result, "the back stops in the middle of a list: the evidence goes on with more items, include them all")
     elif any(_NEGATION.search(ev_t[: h.start()]) for h in hits):
         _fail(result, "the evidence has not/no/without or an arrow just before the back: include it in the back, because it changes the meaning")
+    if result["ok"]:
+        _grade(result, card, cloze)
     if getattr(slide, "ocr", False):
         result["ocr"] = True  # the quote matched OCR text, which can be misread
     if not result["ok"]:
