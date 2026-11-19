@@ -304,19 +304,59 @@ def _fail(result: dict, *problems: str) -> dict:
     return result
 
 
-def _grade(result: dict, card: dict, cloze: bool) -> None:
-    """Set ``status``. A cloze card gets its front from the quote itself (the back
-    replaced by ___), so its question cannot disagree with the slide: 'verified'.
-    A free-form front is never compared with the quote: 'needs_review'."""
+_STOP = {"the", "a", "an", "of", "in", "on", "at", "to", "is", "are", "and", "or", "by", "for", "with", "it", "as"}
+
+
+def _slide_line_context(slide: str, quote: str) -> str:
+    """The quote widened to whole slide lines, plus the line before it when that
+    line ends in ':' or '?' (a heading such as 'NOT features of ...:'). '' if the
+    quote is not on the slide letter for letter."""
+    lines = [" ".join(ln.split()) for ln in slide.splitlines()]
+    lines = [ln for ln in lines if ln]
+    if quote not in " ".join(lines):  # a word split over two lines: "gluco-" / "neogenesis"
+        merged = []
+        for ln in lines:
+            if merged and merged[-1].endswith("-") and ln[:1].islower():
+                merged[-1] += ln
+            else:
+                merged.append(ln)
+        lines = merged
+    flat, starts = "", []
+    for ln in lines:
+        starts.append(len(flat))
+        flat += ln + " "
+    i = flat.find(quote)
+    if i < 0:
+        return ""
+    j = i + len(quote)
+    first = max(k for k, st in enumerate(starts) if st <= i)
+    last = max(k for k, st in enumerate(starts) if st < j)
+    if first > 0 and lines[first - 1].rstrip().endswith((":", "?")):
+        first -= 1
+    return " ".join(lines[first:last + 1])
+
+
+def _grade(result: dict, card: dict, cloze: bool, slide: str) -> None:
+    """Set ``status``. A cloze card gets its front from the slide's own line (the
+    back replaced by ___), so its question cannot disagree with the slide:
+    'verified'. A free-form front is never compared with the quote:
+    'needs_review'. OCR text is never 'verified'."""
     if not cloze:
         result["status"] = "needs_review"
         return
-    quote = " ".join(card["evidence"].split())
-    front, hits = re.subn(re.escape(" ".join(card["back"].split())), "___", quote, flags=re.I)
-    if not hits:
-        _fail(result, "cannot build a cloze card: the back is not written the same way in the evidence")
+    quote, back = " ".join(card["evidence"].split()), " ".join(card["back"].split())
+    context = _slide_line_context(slide, quote)
+    if not context:
+        _fail(result, "a cloze card needs the quote exactly as on the slide, same letters and signs: copy it from get_slide")
         return
-    result["status"], result["front"] = "verified", front
+    pattern = (r"(?<!\w)" if back[0].isalnum() else "") + re.escape(back) + (r"(?!\w)" if back[-1].isalnum() else "")
+    front, hits = re.subn(pattern, "___", context)
+    if not hits:
+        _fail(result, "cannot build a cloze card: the back must appear in the quote exactly as written, as whole words")
+    elif back.lower() in _STOP or len(re.findall(r"\w+", front.replace("___", " "))) < 2:
+        _fail(result, "cloze back is too small or is the whole quote: the blank would have no context")
+    else:
+        result["status"], result["front"] = ("needs_review" if getattr(slide, "ocr", False) else "verified"), front
 
 
 def check_card(card: dict, slides: list[str]) -> dict:
@@ -365,7 +405,7 @@ def check_card(card: dict, slides: list[str]) -> dict:
     elif any(_NEGATION.search(ev_t[: h.start()]) for h in hits):
         _fail(result, "the evidence has not/no/without or an arrow just before the back: include it in the back, because it changes the meaning")
     if result["ok"]:
-        _grade(result, card, cloze)
+        _grade(result, card, cloze, slide)
     if getattr(slide, "ocr", False):
         result["ocr"] = True  # the quote matched OCR text, which can be misread
     if not result["ok"]:

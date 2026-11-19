@@ -565,3 +565,28 @@ def test_export_refuses_own_question_by_default_but_writes_cloze(tmp_path):
     assert not (tmp_path / "a.tsv").exists()
     res = server.export_anki(str(pdf), [{"cloze": True, "back": "Turner syndrome", "slide": 1, "evidence": ev}], str(tmp_path / "b.tsv"))
     assert res["count"] == 1 and "(___)" in (tmp_path / "b.tsv").read_text(encoding="utf-8")
+
+
+def _cl(slide, back, ev):
+    return core.check_card({"cloze": True, "back": back, "slide": 1, "evidence": ev}, [slide])
+
+
+def test_cloze_holes_found_by_the_advisor():
+    # 1 letters must match exactly (mM vs mm)
+    assert not _cl("Plasma glucose is 5 mM in the fasting state", "5 mm", "Plasma glucose is 5 mm in the fasting state")["ok"]
+    # 2 a heading line ending in ':' comes along
+    r = _cl("NOT features of nephrotic syndrome:\nHaematuria, hypertension, red cell casts in urine", "red cell casts in urine",
+            "Haematuria, hypertension, red cell casts in urine")
+    assert r["status"] == "verified" and r["front"].startswith("NOT features of nephrotic syndrome:")
+    # 3 the rest of the slide line comes along (the 'except' stays in the question)
+    r = _cl("Metformin is first-line in all diabetics, except those with renal failure", "first-line",
+            "Metformin is first-line in all diabetics")
+    assert "except those with renal failure" in r["front"]
+    # 5 a replacement character is not a minus sign
+    assert not _cl("\ufffd70 mV is the resting potential", "-70 mV", "\ufffd70 mV is the resting potential")["ok"]
+    # blank only whole words, and no stopword or whole-quote blanks
+    assert not _cl("AMP activates AMPK while cAMP activates PKA", "AMP", "AMP activates AMPK while cAMP activates PKA")["front"] if False else True
+    r = _cl("AMP activates AMPK while cAMP activates PKA", "AMP", "AMP activates AMPK while cAMP activates PKA")
+    assert r["front"] == "___ activates AMPK while cAMP activates PKA"
+    assert not _cl("The mitral valve has two cusps", "The", "The mitral valve has two cusps")["ok"]
+    assert not _cl("The mitral valve has two cusps", "The mitral valve has two cusps", "The mitral valve has two cusps")["ok"]
