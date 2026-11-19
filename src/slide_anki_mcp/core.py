@@ -32,7 +32,7 @@ _SUPER = str.maketrans({
 _ARABIC = str.maketrans({"ی": "ي", "ى": "ي", "ھ": "ه", "ک": "ك"})
 
 
-def _text(s: str, join_hyphen: bool = True) -> str:
+def _text(s: str, join_hyphen: bool = True, split_joined: bool = False) -> str:
     """Make text comparable without losing symbols, signs or digits.
 
     Only layout is ignored: case, runs of whitespace, a word split by a hyphen
@@ -42,6 +42,8 @@ def _text(s: str, join_hyphen: bool = True) -> str:
     Persian-style yeh, heh and kaf, which some fonts produce, count as the
     Arabic ones, and a space is added where Arabic meets Latin or digits.
     """
+    if split_joined:  # text boxes glued by the PDF: "GlycerolConsequence"
+        s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)
     s = s.translate(_SUPER)
     s = unicodedata.normalize("NFKC", s).translate(_ARABIC)
     s = "".join(ch for ch in s if unicodedata.category(ch) not in ("Mn", "Cf"))
@@ -135,13 +137,15 @@ def check_card(card: dict, slides: list[str]) -> dict:
         if not isinstance(value, str) or not _text(value):
             _fail(result, f"{name} must be non-empty text")
     if result["unsupported"]:
+        result["slide_text"] = slide[:3000]
         return result
     if not _has_text(slide):
         return _fail(result, "slide has no text, cannot verify")
     slide_t, ev_t, back_t = _text(slide), _text(evidence), _text(back)
     if len(ev_t.split()) < MIN_EVIDENCE_WORDS:
         _fail(result, f"evidence too short: quote a full sentence or line (at least {MIN_EVIDENCE_WORDS} words)")
-    elif not (_contains(slide_t, ev_t) or _contains(_text(slide, join_hyphen=False), ev_t)):
+    elif not any(_contains(_text(slide, join_hyphen=j, split_joined=sp), ev_t)
+                 for j, sp in ((True, False), (False, False), (True, True))):
         _fail(result, "evidence is not on this slide exactly as quoted")
     elif not (hits := _matches(ev_t, back_t)):
         _fail(result, "the back is not inside the evidence quote")

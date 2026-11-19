@@ -336,3 +336,13 @@ def test_negation_in_second_copy_and_newline_in_evidence(tmp_path):
     out = core.write_anki_tsv([card], str(tmp_path / "n.tsv"))
     rows = [ln for ln in open(out, encoding="utf-8").read().split("\n") if ln and not ln.startswith("#")]
     assert len(rows) == 1 and "Mitral valve has two cusps" in rows[0]
+
+
+def test_glued_text_boxes_and_slide_text_on_empty_back():
+    slide = "G6Pase\nGlycerolConsequence of any block: lactate cannot become glucose"
+    q = "Consequence of any block: lactate cannot become glucose"
+    assert core.check_card({"front": "f", "back": "lactate cannot become glucose", "evidence": q, "slide": 1}, [slide])["ok"]
+    wrong = q.replace("lactate", "pyruvate")
+    assert not core.check_card({"front": "f", "back": "pyruvate cannot become glucose", "evidence": wrong, "slide": 1}, [slide])["ok"]
+    res = core.check_card({"front": "f", "back": "", "evidence": q, "slide": 1}, [slide])
+    assert not res["ok"] and res["slide_text"].startswith("G6Pase")
