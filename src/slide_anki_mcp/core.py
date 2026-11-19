@@ -16,6 +16,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
+_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 MIN_TEXT_CHARS = 40  # list_slides warns below this
 MIN_WORD_CHARS = 5  # fewer word characters than this = "no text"
 MIN_EVIDENCE_WORDS = 4
@@ -49,22 +50,36 @@ def _text(s: str, join_hyphen: bool = True) -> str:
     return re.sub(r"\s+", " ", s).strip().casefold().strip(" .;:,")
 
 
-def _contains(haystack: str, needle: str) -> bool:
-    """True if needle is in haystack as whole words, not cut from a longer token.
+_NEGATION = re.compile(r"(?:^|\s)(?:not|no|never|without|non|cannot|neither|nor|↑|↓)\s+$")
 
-    "1500 ml" is not found in "1000-1500 ml", and "70 mv" is not found in "-70 mv".
+
+def _find(haystack: str, needle: str):
+    """Match of needle in haystack as whole words, not cut from a longer token.
+
+    "1500 ml" is not found in "1000-1500 ml", "70 mv" is not found in "-70 mv",
+    and "↑" is not found in "↑↑".
     """
     if not needle:
-        return False
-    pattern = r"(?<![\w.+\-<>^])" + re.escape(needle) + r"(?![\w^+\-/%]|[.,]\d)"
-    return re.search(pattern, haystack) is not None
+        return None
+    pattern = r"(?<![\w.+\-<>^↑↓])" + re.escape(needle) + r"(?![\w^+\-/%↑↓]|[.,]\d)"
+    return re.search(pattern, haystack)
+
+
+def _contains(haystack: str, needle: str) -> bool:
+    return _find(haystack, needle) is not None
 
 
 def read_slides(pdf_path: str) -> list[str]:
     """Return the text of each page (slide), index 0 = slide 1."""
+    if Path(pdf_path).is_dir():
+        raise ValueError(f"{pdf_path} is a folder: give the full path of the PDF file")
     try:
         reader = PdfReader(pdf_path)
+        if reader.is_encrypted and not reader.decrypt(""):
+            raise ValueError(f"{pdf_path} is password-protected: remove the password and save a copy")
         pages = list(reader.pages)
+    except ValueError:
+        raise
     except FileNotFoundError:
         raise ValueError(f"file not found: {pdf_path}") from None
     except Exception as exc:  # pypdf raises several error types for bad files
@@ -110,8 +125,10 @@ def check_card(card: dict, slides: list[str]) -> dict:
         return _fail(result, "card must be an object with front, back, slide, evidence")
     page = card.get("slide")
     result["slide"] = page
-    if isinstance(page, bool) or not isinstance(page, int) or not 1 <= page <= len(slides):
-        return _fail(result, "slide number missing or out of range")
+    if isinstance(page, bool) or not isinstance(page, int):
+        return _fail(result, "slide must be a whole number such as 3")
+    if not 1 <= page <= len(slides):
+        return _fail(result, f"slide number out of range: this PDF has slides 1 to {len(slides)}")
     slide = slides[page - 1]
     front, back, evidence = card.get("front"), card.get("back"), card.get("evidence")
     for name, value in (("front", front), ("back", back), ("evidence", evidence)):
@@ -126,8 +143,10 @@ def check_card(card: dict, slides: list[str]) -> dict:
         _fail(result, f"evidence too short: quote a full sentence or line (at least {MIN_EVIDENCE_WORDS} words)")
     elif not (_contains(slide_t, ev_t) or _contains(_text(slide, join_hyphen=False), ev_t)):
         _fail(result, "evidence is not on this slide exactly as quoted")
-    elif not _contains(ev_t, back_t):
+    elif (hit := _find(ev_t, back_t)) is None:
         _fail(result, "the back is not inside the evidence quote")
+    elif not _NEGATION.search(back_t) and _NEGATION.search(ev_t[: hit.start()]):
+        _fail(result, "the evidence has not/no/without or an arrow just before the back: include it in the back, because it changes the meaning")
     if not result["ok"]:
         result["slide_text"] = slide[:3000]
     return result
@@ -147,10 +166,15 @@ def write_anki_tsv(cards: list[dict], out_path: str, deck_tag: str = "slides") -
     not a new ``.tsv`` file in an existing folder.
     """
     path = Path(out_path)
-    if path.suffix.lower() != ".tsv":
+    if not path.name.lower().endswith(".tsv"):
         raise ValueError("out_path must end with .tsv")
+    if path.stem.split(".")[0].upper() in _RESERVED:
+        raise ValueError(f"{path.name} is a reserved Windows name, choose another file name")
     if not path.parent.is_dir():
-        raise ValueError(f"folder does not exist: {path.parent}")
+        what = "a file, not a folder" if path.parent.exists() else "a folder that does not exist"
+        raise ValueError(f"{path.parent} is {what}")
+    if path.is_dir():
+        raise ValueError(f"a folder with that name already exists: {path}")
     try:
         fh = path.open("x", newline="", encoding="utf-8")
     except FileExistsError:

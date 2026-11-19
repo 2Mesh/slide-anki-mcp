@@ -92,12 +92,17 @@ If Claude cannot find the command, put its full path in `"command"`. Get the pat
 ## What it cannot catch
 
 - **Meaning.** It checks that words are on the slide, not what they mean. If the slide says "Mitral valve does not have three cusps", a card with the back "three cusps" and that full sentence as evidence passes. The "does not" is in the exported card, so you can see it, but the server does not detect it.
+- **Shortened answers.** The back only has to be inside the quote, so a list with an item dropped (`GALT, GALK` from `GALT, GALK, GALE`) passes. So does a true line from the slide under a question it does not answer, such as one enzyme from a list under "which enzyme is the classic one?".
+- **Negation and direction.** If `not`, `no`, `without`, `↑` or `↓` stands right before the back inside the quote, the card is rejected unless the back includes it. Other wording that flips the meaning is not caught.
 - **The front.** The question is never checked. A true sentence under the wrong question passes.
 - **Units that differ only in case.** Case is ignored, so `mM` and `mm`, or `Mg` and `mg`, count as the same.
 - **Quotes that start right after a dash or sign.** If a slide line reads `Beverages -1000-1500 ml`, the quote has to include the dash. A quote that cuts a number, unit or range in the middle (`135` from `135-145 mmol/L`, `140 mmol` from `140 mmol/L`) is rejected.
 - **Paraphrases.** A correct answer in other words is rejected. Copy the slide's wording. Small differences such as "200mL" on the slide and "200 mL" in the card are also rejected.
 - **Images.** Text inside pictures, scanned pages and diagrams is not read, and cards that cite those slides are rejected. On one real 40-slide lecture, 4 slides had no text at all and 7 more had under 40 characters, mostly section titles.
+- **Text boxes that join.** Some PDFs glue two text boxes together (`GlycerolConsequence`). A correct quote that starts at the second box is then rejected. Copy the text from `get_slide`.
 - **Bad text extraction.** If the PDF stores text in an odd way, the extracted words can be split or out of order, and correct cards will fail.
+
+On a second real lecture (a 31-slide PowerPoint saved as PDF), I wrote 40 correct and 40 wrong cards by hand: 39 of 40 correct cards were accepted (the miss was the glued text boxes above), and 7 of 40 wrong cards were accepted, all of them shortened lists or true lines under the wrong question. Small sample, written by me, so treat it as a rough guide.
 
 For the numbers: an earlier version of this tool matched the answer against the slide with symbols removed. On a real 40-slide lecture it accepted 8 of 30 cards that were made wrong on purpose, for example a changed number or a dropped "No". This version keeps symbols and requires a quote. On a new set of 30 correct and 29 wrong cards from the same lecture (written by a reviewer, so a small and friendly sample), it accepted 26 of the 30 correct cards and 0 of the 29 wrong ones. The 4 rejected correct cards were quotes shorter than 4 words, a quote with `and` where the slide has `&`, and a quote that left out a leading dash. The wrong cards did not include a dropped "not", because that lecture has no usable place for one, so that case is untested on real slides.
 

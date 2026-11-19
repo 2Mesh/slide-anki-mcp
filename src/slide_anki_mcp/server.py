@@ -47,12 +47,13 @@ def export_anki(pdf_path: str, cards: list[dict], out_path: str) -> dict:
 
     out_path must end with .tsv, be in an existing folder, and must not exist yet.
     The evidence quote and slide number are written at the end of each answer.
-    Exact duplicates (same front and back) are written once; the indexes of the
+    Duplicates (same front and back, ignoring case and extra spaces) are written once; the indexes of the
     skipped copies are listed in 'duplicates_skipped'.
     """
-    path = Path(out_path)
-    if path.suffix.lower() != ".tsv":
+    if not Path(out_path).name.lower().endswith(".tsv"):
         raise ValueError("out_path must end with .tsv")
+    if not cards:
+        raise ValueError("cards is empty: nothing to export")
     slides = core.read_slides(pdf_path)
     checks = [core.check_card(c, slides) for c in cards]
     bad = [i for i, c in enumerate(checks) if not c["ok"]]

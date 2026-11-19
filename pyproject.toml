@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "slide-anki-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "MCP server that turns lecture PDFs into Anki cards, rejecting any answer the cited slide does not support."
 readme = "README.md"
 license = "MIT"

@@ -276,3 +276,52 @@ def test_arabic_from_edge_pdf_persian_letter_forms():
     assert not core.check_card({"front": "f", "back": bad, "evidence": bad, "slide": 1}, slides)["ok"]
     q2 = "يفرز من الوطاء ويزيد إعادة امتصاص الماء"
     assert core.check_card({"front": "f", "back": q2, "evidence": q2, "slide": 2}, slides)["ok"]
+
+
+def test_back_negated_in_evidence_is_rejected():
+    slides = ["Note: galactose is not essential in the diet.\nGlucagon test: no glucose rise in type I"]
+    def ok(back, ev):
+        return core.check_card({"front": "f", "back": back, "evidence": ev, "slide": 1}, slides)["ok"]
+    ev = "galactose is not essential in the diet"
+    assert not ok("essential", ev)
+    assert ok("not essential", ev)
+    assert not ok("glucose rise in type I", "Glucagon test: no glucose rise in type I")
+    assert ok("no glucose rise in type I", "Glucagon test: no glucose rise in type I")
+
+
+def test_single_arrow_is_not_found_inside_double_arrow():
+    slides = ["PC deficiency Fasting - ↑↑ N"]
+    def ok(back):
+        return core.check_card({"front": "f", "back": back, "evidence": "PC deficiency Fasting - ↑↑ N", "slide": 1}, slides)["ok"]
+    assert not ok("↑")
+    assert ok("↑↑")
+
+
+def test_arrow_before_back_must_be_in_back():
+    slides = ["Pi locked in F-1-P; ↓ serum phosphate rises later"]
+    ev = "Pi locked in F-1-P; ↓ serum phosphate"
+    def ok(back):
+        return core.check_card({"front": "f", "back": back, "evidence": ev, "slide": 1}, slides)["ok"]
+    assert not ok("serum phosphate")
+    assert ok("↓ serum phosphate")
+
+
+def test_friendly_errors(tmp_path):
+    import pytest
+    with pytest.raises(ValueError, match="folder"):
+        core.read_slides(str(tmp_path))
+    c = {"front": "f", "back": "two cusps", "evidence": "The mitral valve has two cusps", "slide": "1"}
+    assert "whole number" in core.check_card(c, ["The mitral valve has two cusps"])["unsupported"][0]
+    c["slide"] = 5
+    assert "1 to 1" in core.check_card(c, ["The mitral valve has two cusps"])["unsupported"][0]
+    ok = [dict(c, slide=1)]
+    for name in ("CON.tsv", "nul.tsv"):
+        with pytest.raises(ValueError, match="reserved"):
+            core.write_anki_tsv(ok, str(tmp_path / name))
+    (tmp_path / "d.tsv").mkdir()
+    with pytest.raises(ValueError, match="folder with that name"):
+        core.write_anki_tsv(ok, str(tmp_path / "d.tsv"))
+    (tmp_path / "f.pdf").write_text("x")
+    with pytest.raises(ValueError, match="a file, not a folder"):
+        core.write_anki_tsv(ok, str(tmp_path / "f.pdf" / "x.tsv"))
+    assert core.write_anki_tsv(ok, str(tmp_path / ".tsv"))
