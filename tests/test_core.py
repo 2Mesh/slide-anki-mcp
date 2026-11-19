@@ -611,3 +611,18 @@ def test_reviewed_indexes_write_free_questions_with_a_tag_and_suggest_a_cloze(tm
     assert res["suggested_cloze_fronts"][0] == "The mitral valve has ___ and the aortic valve has three"
     res = server.export_anki(str(pdf), [free], str(tmp_path / "b.tsv"), reviewed_indexes=[0])
     assert res["count"] == 1 and "reviewed" in (tmp_path / "b.tsv").read_text(encoding="utf-8")
+
+
+def test_cloze_page_number_title_is_no_context_and_private_bullets_become_dots():
+    r = _cl("- 14 -\nalanine is made in muscle", "alanine is made in muscle", "alanine is made in muscle")
+    assert not r["ok"] and "no context" in r["unsupported"][0]
+    r = _cl("\uf0b7 Alanine is made in muscle and sent", "muscle", "\uf0b7 Alanine is made in muscle and sent")
+    assert r["front"].startswith("\u2022 Alanine") and "\uf0b7" not in r["front"]
+
+
+def test_arabic_pdf_with_almost_no_common_words_gets_a_warning():
+    words = " ".join(f"كلمة{c}" for c in "ابجدهوزحطيكلمنسعفصقرشتثخذضظغ" * 12)
+    warned = core.slide_overview([words])[0]["warning"]
+    assert warned and "garbled" in warned
+    healthy = " ".join(["هذا الدرس في الجهاز الهضمي ومن اهم الاعضاء"] * 40)
+    assert core.slide_overview([healthy])[0]["warning"] is None

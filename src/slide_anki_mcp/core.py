@@ -279,8 +279,20 @@ def _has_text(slide: str) -> bool:
     return len(re.findall(r"\w", slide)) >= MIN_WORD_CHARS
 
 
+_COMMON_AR = set("في من على إلى الى عن أن ان هذا هذه التي الذي ما لا مع أو او كان كل بين هو هي قد ذلك و".split())
+
+
+def _arabic_looks_garbled(slides: list[str]) -> bool:
+    """Healthy Arabic prose has 8 to 16 percent of its words in a short list of common
+    words (measured on 30 real PDFs); under 3.5 percent over 200+ words suggests wrong letters.
+    Only a hint: it misses some garbling, and a list of terms can trip it."""
+    words = re.findall(f"[{_AR}]+", " ".join(slides))
+    return len(words) >= 200 and sum(w in _COMMON_AR for w in words) / len(words) < 0.035
+
+
 def slide_overview(slides: list[str]) -> list[dict]:
     out = []
+    garbled = _arabic_looks_garbled(slides)
     for i, text in enumerate(slides, start=1):
         first = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
         warning = None
@@ -292,6 +304,8 @@ def slide_overview(slides: list[str]) -> list[dict]:
             warning = "text layer looks damaged (wrong or reversed letters): copy quotes from get_slide and check them"
         elif "�" in text:
             warning = f"{text.count(chr(0xFFFD))} unreadable character(s) shown as �; they match '-' only"
+        elif garbled:
+            warning = "this Arabic PDF has very few common words, so its text may be garbled: read get_slide before trusting any card"
         elif len(text) < MIN_TEXT_CHARS:
             warning = "under 40 characters of text: may be an image or title slide"
         out.append({"slide": i, "title": first[:80], "chars": len(text), "warning": warning})
@@ -365,7 +379,7 @@ def _grade(result: dict, card: dict, cloze: bool, slide: str) -> None:
         return
     if back.lower() in _STOP or len(re.findall(r"\w+", front.replace("___", " "))) < 2:
         title = " ".join(next((ln for ln in slide.splitlines() if ln.strip()), "").split())
-        if not title or title in context or back.lower() in _STOP:
+        if len(re.findall(r"[^\W\d_]+", title)) < 2 or title in context or back.lower() in _STOP:  # a page number is no topic
             _fail(result, "cloze back is too small or is the whole quote: the blank would have no context")
             return
         front = f"{title} — {front}"  # the slide's own title gives the blank a topic
@@ -373,6 +387,7 @@ def _grade(result: dict, card: dict, cloze: bool, slide: str) -> None:
     if front.replace("___", back) != context:  # the promise: filling the blank gives back the slide's own words
         _fail(result, "internal check failed: the cloze front does not rebuild the slide line")
         return
+    front = re.sub("[-]", "•", front)  # private-use bullets (Symbol/Wingdings) show as a dot
     result["status"], result["front"] = ("needs_review" if getattr(slide, "ocr", False) else "verified"), front
 
 
