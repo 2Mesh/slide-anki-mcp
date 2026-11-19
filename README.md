@@ -95,7 +95,7 @@ Each card carries its slide tag, so you can filter by lecture and slide. The fil
 
 ## Feedback so far
 
-Informal, by message, not measured: two classmates tried it on their own lectures and said it worked well. I have no written test results yet. If you try it, please open a "Test report" issue, including when it fails.
+Informal, by message, not measured: six classmates tried it on their own lectures and all six said it worked well. I have no written test results yet. If you try it, please open a "Test report" issue, including when it fails.
 
 ## Develop
 
