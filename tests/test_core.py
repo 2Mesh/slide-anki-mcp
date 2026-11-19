@@ -197,7 +197,7 @@ def test_server_export_checks_before_writing(tmp_path):
     assert res["written"] is None and res["rejected_card_indexes"] == [1]
     assert not (tmp_path / "o.tsv").exists()
     with pytest.raises(ValueError, match=".tsv"):
-        server.export_anki(str(pdf), [good], str(tmp_path / "victim.cfg"))
+        server.export_anki(str(pdf), [good], str(tmp_path / "victim.cfg"), allow_unchecked_questions=True)
 
 
 def test_export_skips_duplicates_ignoring_case_and_spaces(tmp_path):
@@ -206,7 +206,7 @@ def test_export_skips_duplicates_ignoring_case_and_spaces(tmp_path):
     one = card("two cusps", "Mitral valve has two cusps", front="Cusps?")
     same = {**one, "front": "Cusps? ", "back": "Two  cusps"}
     other = {**one, "front": "Mitral cusps?"}
-    res = server.export_anki(str(pdf), [one, other, same], str(tmp_path / "o.tsv"))
+    res = server.export_anki(str(pdf), [one, other, same], str(tmp_path / "o.tsv"), allow_unchecked_questions=True)
     assert res["count"] == 2 and res["duplicates_skipped"] == [2]
     assert len(rows(res["written"])[1]) == 2
 
@@ -553,3 +553,15 @@ def test_free_form_front_needs_review_and_bad_cloze_fails():
     assert r["ok"] and r["status"] == "needs_review"
     r = core.check_card({"cloze": True, "back": "Edwards syndrome", "slide": 1, "evidence": ev}, slides)
     assert not r["ok"]
+
+
+def test_export_refuses_own_question_by_default_but_writes_cloze(tmp_path):
+    pdf = tmp_path / "lec.pdf"
+    make_pdf(pdf, [["Examples: trisomy 21 (Down syndrome), monosomy X (Turner syndrome), and Klinefelter syndrome"]])
+    ev = "Examples: trisomy 21 (Down syndrome), monosomy X (Turner syndrome), and Klinefelter syndrome"
+    free = {"front": "Trisomy 21 causes which syndrome?", "back": "Turner syndrome", "slide": 1, "evidence": ev}
+    res = server.export_anki(str(pdf), [free], str(tmp_path / "a.tsv"))
+    assert res["written"] is None and res["needs_review_indexes"] == [0]
+    assert not (tmp_path / "a.tsv").exists()
+    res = server.export_anki(str(pdf), [{"cloze": True, "back": "Turner syndrome", "slide": 1, "evidence": ev}], str(tmp_path / "b.tsv"))
+    assert res["count"] == 1 and "(___)" in (tmp_path / "b.tsv").read_text(encoding="utf-8")

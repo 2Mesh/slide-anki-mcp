@@ -34,7 +34,7 @@ async def main():
 
             async def export(cards, name):
                 res = await s.call_tool("export_anki", {"pdf_path": str(pdf), "cards": cards,
-                                                        "out_path": str(d / name)})
+                                                        "out_path": str(d / name), "allow_unchecked_questions": True})
                 return res
 
             ok = json.loads((await export(good, "o.tsv")).content[0].text)

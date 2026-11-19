@@ -45,9 +45,14 @@ def check_cards(pdf_path: str, cards: list[dict]) -> list[dict]:
 
 
 @mcp.tool()
-def export_anki(pdf_path: str, cards: list[dict], out_path: str) -> dict:
+def export_anki(pdf_path: str, cards: list[dict], out_path: str, allow_unchecked_questions: bool = False) -> dict:
     """Write cards to a new Anki-importable .tsv, only if every card passes check_cards.
 
+    By default only cloze cards (status "verified", front built from the quote) are
+    written: a card with its own front is refused and listed in 'needs_review_indexes',
+    because nothing checks that its question matches its quote. Pass
+    allow_unchecked_questions=true only after a person has read each question next
+    to its quote.
     out_path must end with .tsv, be in an existing folder, and must not exist yet.
     The evidence quote and slide number are written at the end of each answer.
     Duplicates (same front and back, ignoring case and extra spaces) are written once; the indexes of the
@@ -64,6 +69,10 @@ def export_anki(pdf_path: str, cards: list[dict], out_path: str) -> dict:
         return {"written": None, "rejected_card_indexes": bad, "details": [checks[i] for i in bad]}
     cards = [{**c, "front": k["front"]} if k.get("status") == "verified" else c for c, k in zip(cards, checks)]
     review = [i for i, k in enumerate(checks) if k.get("status") != "verified"]
+    if review and not allow_unchecked_questions:
+        return {"written": None, "needs_review_indexes": review,
+                "message": "these cards have their own question, which nothing checks against the quote: "
+                           "send them with \"cloze\": true (no front), or set allow_unchecked_questions=true after reading each one"}
     seen, unique, dupes = set(), [], []
     for i, c in enumerate(cards):
         key = core.card_key(c)
