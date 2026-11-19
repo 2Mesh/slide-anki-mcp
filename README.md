@@ -71,7 +71,7 @@ and the file contains:
 "Normal plasma sodium?"	"135-145 mmol/L  |  Source (slide 2): Normal plasma sodium is 135-145 mmol/L"	"slides Slide_2"
 ```
 
-The header lines are read by Anki 2.1.54 and newer. Older versions need the field separator set to Tab by hand. Every field is quoted so a front that starts with `#` is not read as a header line. I have not tried the import in Anki yet.
+The header lines are read by Anki 2.1.54 and newer. Older versions need the field separator set to Tab by hand. Every field is quoted so a front that starts with `#` is not read as a header line. Tested with the import code of the official `anki` Python library (version 26.09.4), not the Anki desktop app: 3 of 3 test notes imported, the `#` front, the Arabic text and the tags came through. Quotes in the back are stored as `&quot;`, which should show as plain quotes. I have not opened the result in the Anki app.
 
 ## Install for Claude Desktop
 
