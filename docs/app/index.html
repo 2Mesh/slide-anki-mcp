@@ -69,8 +69,12 @@ async function show(n) {
   lines = rows.map(r => r.split(/\s+/).filter(Boolean).join(" ")).filter(Boolean);
   title = lines[0] || "";
   $("pos").textContent = n + " / " + pdf.numPages;
+  // Edge/Chrome "Save as PDF" stores Arabic as separate glyphs in visual order; they cannot be read back reliably here.
+  const glyphs = lines.some(t => /[ﭐ-﷿ﹰ-﻿]/.test(t));
+  if (glyphs) lines = [];
   $("lines").replaceChildren(...lines.map(t => { const d = document.createElement("div"); d.className = "line"; d.textContent = t; d.dir = "auto"; return d; }));
-  $("msg").textContent = lines.length ? "" : "This slide has no text (maybe an image).";
+  $("msg").textContent = glyphs ? "This slide's Arabic was printed from Edge or Chrome and its letters are stored as loose glyphs, so this page cannot read it correctly. Save the file as PDF from Word or PowerPoint instead, or use the desktop tool."
+    : lines.length ? "" : "This slide has no text (maybe an image).";
 }
 function render() {
   $("n").textContent = cards.length;
