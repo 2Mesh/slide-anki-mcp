@@ -346,3 +346,47 @@ def test_glued_text_boxes_and_slide_text_on_empty_back():
     assert not core.check_card({"front": "f", "back": "pyruvate cannot become glucose", "evidence": wrong, "slide": 1}, [slide])["ok"]
     res = core.check_card({"front": "f", "back": "", "evidence": q, "slide": 1}, [slide])
     assert not res["ok"] and res["slide_text"].startswith("G6Pase")
+
+
+def _ok(slide, back, ev=None):
+    return core.check_card({"front": "f", "back": back, "evidence": ev or slide, "slide": 1}, [slide])["ok"]
+
+
+def test_numbers_cut_after_comma_slash_colon_times():
+    for slide, back in [("Daily water need is 1,500 ml", "500 ml"), ("Normal blood pressure is 120/80 mmHg", "80 mmHg"),
+                        ("Adrenaline is given 1:1000 IM", "1000 IM"), ("Normal WBC is 4×10⁹/L", "4")]:
+        assert not _ok(slide, back)
+    assert _ok("Daily water need is 1,500 ml", "1,500 ml")
+    assert _ok("Normal blood pressure is 120/80 mmHg", "120/80 mmHg")
+
+
+def test_negation_variants():
+    assert not _ok("Von Gierke: ↑↑ lactate and urate", "lactate and urate")
+    assert not _ok("Galactose (not essential in the diet)", "essential in the diet")
+    assert not _ok("The valve doesn't have three cusps", "have three cusps")
+    assert _ok("Galactose (not essential in the diet)", "not essential in the diet")
+
+
+def test_camel_split_needs_four_lowercase_letters():
+    assert not _ok("cAMP activates protein kinase A", "protein kinase A", "AMP activates protein kinase A")
+    assert _ok("cAMP activates protein kinase A", "protein kinase A", "cAMP activates protein kinase A")
+
+
+def test_list_cut_short_is_rejected():
+    ev = "Liver failure, proximal tubular dysfunction, lactic acidosis"
+    assert not _ok(ev, "Liver failure, proximal tubular dysfunction")
+    assert _ok(ev, "Liver failure, proximal tubular dysfunction, lactic acidosis")
+    assert _ok(ev, "lactic acidosis")
+
+
+def test_unreadable_char_is_shown_and_matches_minus_only():
+    slide = "Resting potential is �70 mV in neurons"
+    assert core.slide_overview([slide])[0]["warning"]
+    assert _ok(slide, "-70 mV", "Resting potential is -70 mV in neurons")
+    assert not _ok(slide, "70 mV", "Resting potential is 70 mV in neurons")
+
+
+def test_advisor_false_reject_cases():
+    assert _ok("ACE inhibitors (enalapril, captopril, etc.) lower BP", "enalapril, captopril")
+    assert _ok("Answer yes/no questions only in this test", "questions only")
+    assert not _ok("Galactose (not essential in the diet)", "essential in the diet")

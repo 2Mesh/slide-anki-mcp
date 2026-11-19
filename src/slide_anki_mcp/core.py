@@ -23,13 +23,13 @@ MIN_EVIDENCE_WORDS = 4
 
 _SUPER = str.maketrans({
     "⁰": "^0", "¹": "^1", "²": "^2", "³": "^3", "⁴": "^4", "⁵": "^5", "⁶": "^6",
-    "⁷": "^7", "⁸": "^8", "⁹": "^9", "⁺": "^+", "⁻": "^-",
+    "⁷": "^7", "⁸": "^8", "⁹": "^9", "⁺": "^+", "⁻": "^-", "ⁿ": "^n", "�": "-",
     "₀": "_0", "₁": "_1", "₂": "_2", "₃": "_3", "₄": "_4", "₅": "_5", "₆": "_6",
     "₇": "_7", "₈": "_8", "₉": "_9",
     "–": "-", "—": "-", "−": "-", "‘": "'", "’": "'", "“": '"', "”": '"',
 })
 
-_ARABIC = str.maketrans({"ی": "ي", "ى": "ي", "ھ": "ه", "ک": "ك"})
+_ARABIC = str.maketrans({"ی": "ي", "ى": "ي", "ھ": "ه", "ک": "ك", "ـ": "", "​": " "})
 
 
 def _text(s: str, join_hyphen: bool = True, split_joined: bool = False) -> str:
@@ -43,7 +43,7 @@ def _text(s: str, join_hyphen: bool = True, split_joined: bool = False) -> str:
     Arabic ones, and a space is added where Arabic meets Latin or digits.
     """
     if split_joined:  # text boxes glued by the PDF: "GlycerolConsequence"
-        s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)
+        s = re.sub(r"(?<=[a-z]{4})(?=[A-Z])", " ", s)
     s = s.translate(_SUPER)
     s = unicodedata.normalize("NFKC", s).translate(_ARABIC)
     s = "".join(ch for ch in s if unicodedata.category(ch) not in ("Mn", "Cf"))
@@ -52,7 +52,8 @@ def _text(s: str, join_hyphen: bool = True, split_joined: bool = False) -> str:
     return re.sub(r"\s+", " ", s).strip().casefold().strip(" .;:,")
 
 
-_NEGATION = re.compile(r"(?:^|\s)(?:not|no|never|without|non|cannot|neither|nor|↑|↓)\s+$")
+_NEGATION = re.compile(r"(?:(?:^|[\s(\[])(?:not|no|never|without|non|cannot|neither|nor)|n't|[↑↓])\s+$")
+_MORE = re.compile(r"\s*,\s*(?!etc\b|e\.g\b|i\.e\b)\S")
 
 
 def _matches(haystack: str, needle: str) -> list:
@@ -63,7 +64,7 @@ def _matches(haystack: str, needle: str) -> list:
     """
     if not needle:
         return []
-    pattern = r"(?<![\w.+\-<>^↑↓])" + re.escape(needle) + r"(?![\w^+\-/%↑↓]|[.,]\d)"
+    pattern = r"(?<![\w.+\-<>^↑↓×])(?<!\d[,/:])" + re.escape(needle) + r"(?![\w^+\-/%↑↓×]|[.,:]\d)"
     return list(re.finditer(pattern, haystack))
 
 
@@ -88,7 +89,7 @@ def read_slides(pdf_path: str) -> list[str]:
         raise ValueError(f"cannot read {pdf_path} as a PDF: {exc}") from None
     if not pages:
         raise ValueError("PDF has no pages")
-    return [(page.extract_text() or "").replace("�", "-").strip() for page in pages]
+    return [(page.extract_text() or "").strip() for page in pages]
 
 
 def _has_text(slide: str) -> bool:
@@ -102,6 +103,8 @@ def slide_overview(slides: list[str]) -> list[dict]:
         warning = None
         if not _has_text(text):
             warning = "slide has no text, cannot verify cards against it"
+        elif "�" in text:
+            warning = f"{text.count(chr(0xFFFD))} unreadable character(s) shown as �; they match '-' only"
         elif len(text) < MIN_TEXT_CHARS:
             warning = "under 40 characters of text: may be an image or title slide"
         out.append({"slide": i, "title": first[:80], "chars": len(text), "warning": warning})
@@ -149,6 +152,8 @@ def check_card(card: dict, slides: list[str]) -> dict:
         _fail(result, "evidence is not on this slide exactly as quoted")
     elif not (hits := _matches(ev_t, back_t)):
         _fail(result, "the back is not inside the evidence quote")
+    elif "," in back_t and all(_MORE.match(ev_t, h.end()) for h in hits):
+        _fail(result, "the back stops in the middle of a list: the evidence goes on with more items, include them all")
     elif any(_NEGATION.search(ev_t[: h.start()]) for h in hits):
         _fail(result, "the evidence has not/no/without or an arrow just before the back: include it in the back, because it changes the meaning")
     if not result["ok"]:
