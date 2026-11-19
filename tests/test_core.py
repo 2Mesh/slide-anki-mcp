@@ -325,3 +325,14 @@ def test_friendly_errors(tmp_path):
     with pytest.raises(ValueError, match="a file, not a folder"):
         core.write_anki_tsv(ok, str(tmp_path / "f.pdf" / "x.tsv"))
     assert core.write_anki_tsv(ok, str(tmp_path / ".tsv"))
+
+
+def test_negation_in_second_copy_and_newline_in_evidence(tmp_path):
+    ev = "Mitral valve has two cusps; aortic valve has not two cusps"
+    assert not core.check_card({"front": "f", "back": "two cusps", "evidence": ev, "slide": 1}, [ev])["ok"]
+    slide = "Mitral valve\nhas two cusps"
+    card = {"front": "f", "back": "two cusps", "evidence": slide, "slide": 1}
+    assert core.check_card(card, [slide])["ok"]
+    out = core.write_anki_tsv([card], str(tmp_path / "n.tsv"))
+    rows = [ln for ln in open(out, encoding="utf-8").read().split("\n") if ln and not ln.startswith("#")]
+    assert len(rows) == 1 and "Mitral valve has two cusps" in rows[0]

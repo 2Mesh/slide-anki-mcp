@@ -53,20 +53,20 @@ def _text(s: str, join_hyphen: bool = True) -> str:
 _NEGATION = re.compile(r"(?:^|\s)(?:not|no|never|without|non|cannot|neither|nor|↑|↓)\s+$")
 
 
-def _find(haystack: str, needle: str):
-    """Match of needle in haystack as whole words, not cut from a longer token.
+def _matches(haystack: str, needle: str) -> list:
+    """All matches of needle in haystack as whole words, not cut from a longer token.
 
     "1500 ml" is not found in "1000-1500 ml", "70 mv" is not found in "-70 mv",
     and "↑" is not found in "↑↑".
     """
     if not needle:
-        return None
+        return []
     pattern = r"(?<![\w.+\-<>^↑↓])" + re.escape(needle) + r"(?![\w^+\-/%↑↓]|[.,]\d)"
-    return re.search(pattern, haystack)
+    return list(re.finditer(pattern, haystack))
 
 
 def _contains(haystack: str, needle: str) -> bool:
-    return _find(haystack, needle) is not None
+    return bool(_matches(haystack, needle))
 
 
 def read_slides(pdf_path: str) -> list[str]:
@@ -143,9 +143,9 @@ def check_card(card: dict, slides: list[str]) -> dict:
         _fail(result, f"evidence too short: quote a full sentence or line (at least {MIN_EVIDENCE_WORDS} words)")
     elif not (_contains(slide_t, ev_t) or _contains(_text(slide, join_hyphen=False), ev_t)):
         _fail(result, "evidence is not on this slide exactly as quoted")
-    elif (hit := _find(ev_t, back_t)) is None:
+    elif not (hits := _matches(ev_t, back_t)):
         _fail(result, "the back is not inside the evidence quote")
-    elif not _NEGATION.search(back_t) and _NEGATION.search(ev_t[: hit.start()]):
+    elif any(_NEGATION.search(ev_t[: h.start()]) for h in hits):
         _fail(result, "the evidence has not/no/without or an arrow just before the back: include it in the back, because it changes the meaning")
     if not result["ok"]:
         result["slide_text"] = slide[:3000]
@@ -185,6 +185,7 @@ def write_anki_tsv(cards: list[dict], out_path: str, deck_tag: str = "slides") -
         fh.write("#separator:tab\n#html:false\n#tags column:3\n")
         writer = csv.writer(fh, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_ALL)
         for card in cards:
-            back = f"{card['back']}  |  Source (slide {card['slide']}): {card['evidence']}"
+            evidence = " ".join(card["evidence"].split())
+            back = f"{card['back']}  |  Source (slide {card['slide']}): {evidence}"
             writer.writerow([card["front"], back, f"{deck_tag} Slide_{card['slide']}"])
     return str(path.resolve())

@@ -26,8 +26,8 @@ Needs Python 3.10 or newer. Also on PyPI: https://pypi.org/project/slide-anki-mc
 |---|---|
 | `list_slides(pdf_path)` | Slide numbers with first line and length. Warns about slides with little or no text |
 | `get_slide(pdf_path, slide)` | Exact text of one slide, to copy quotes from |
-| `check_cards(pdf_path, cards)` | Checks each card. A failing card comes back with the slide text so the quote can be fixed |
-| `export_anki(pdf_path, cards, out_path)` | Writes a new `.tsv` only if every card passes. Each card is tagged `Slide_N`. Exact duplicates are written once |
+| `check_cards(pdf_path, cards)` | Checks each card. A card whose quote fails comes back with the slide text so the quote can be fixed |
+| `export_anki(pdf_path, cards, out_path)` | Writes a new `.tsv` only if every card passes. Each card is tagged `Slide_N`. Duplicates (same front and back, ignoring case and extra spaces) are written once |
 
 A card is:
 
@@ -71,7 +71,7 @@ and the file contains:
 "Normal plasma sodium?"	"135-145 mmol/L  |  Source (slide 2): Normal plasma sodium is 135-145 mmol/L"	"slides Slide_2"
 ```
 
-The header lines are read by Anki 2.1.54 and newer. Older versions need the field separator set to Tab by hand. Every field is quoted so a front that starts with `#` is not read as a header line. Tested with the import code of the official `anki` Python library (version 26.09.4), not the Anki desktop app: 3 of 3 test notes imported, the `#` front, the Arabic text and the tags came through. Quotes in the back are stored as `&quot;`, which should show as plain quotes. I have not opened the result in the Anki app.
+The header lines are read by Anki 2.1.54 and newer. Older versions need the field separator set to Tab by hand. Every field is quoted so a front that starts with `#` is not read as a header line. Tested with the import code of the official `anki` Python library (version 26.09.4), not the Anki desktop app: 3 of 3 test notes imported, the `#` front, the Arabic text and the tags came through. The file doubles quotes inside a field (standard CSV); Anki stored them as `&quot;`, which should show as plain quotes. I have not opened the result in the Anki app.
 
 ## Install for Claude Desktop
 
